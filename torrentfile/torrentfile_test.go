@@ -8,7 +8,7 @@ func TestOpenTorrentFile(t *testing.T) {
 	filepath := "testdata/cosmos-laundromat.torrent"
 	tf, err := OpenTorrentFile(filepath)
 	if err != nil {
-		t.Errorf("Eailed to open .torrent file: %v", err)
+		t.Errorf("%v",err)
 		return
 	}
 	got_announce := tf.Announce

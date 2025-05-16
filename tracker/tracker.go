@@ -3,15 +3,15 @@ package tracker
 import (
 	"crypto/rand"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
+
+	"github.com/jackpal/bencode-go"
 
 	tf "github.com/samir-adh/bytetorrent/torrentfile"
 )
 
 type Peer struct {
-	Id       string
 	IpAdress [4]byte ""
 	Port     [2]byte
 }
@@ -23,17 +23,24 @@ type TrackerResponse struct {
 	Peers      []Peer
 }
 
-func GeneratePeerId() (string, error) {
+type BencondeTrackerResponse struct {
+	Interval int    `bencode:"interval"`
+	Peers    string `bencode:"peers"`
+}
+
+func RandomPeerId() (string, error) {
 	buffer := make([]byte, 20)
 	bytes_written, err := rand.Read(buffer)
 	if bytes_written != 20 {
 		return "", fmt.Errorf("wrong amount of bytes written, expected: 20 but go ")
 	}
 	if err != nil {
-		return "", fmt.Errorf("failed to write peer id buffer: %v", err)
+		return "", err
 	}
 	return string(buffer), nil
 }
+
+
 
 func UrlEncodedInfoHash(tor *tf.TorrentFile) (string, error) {
 	return string(tor.InfoHash[:]), nil
@@ -43,7 +50,7 @@ func UrlEncodedInfoHash(tor *tf.TorrentFile) (string, error) {
 func BuildTrackerRequest(tor *tf.TorrentFile, peerId string, port int) (string, error) {
 	infoHash, err := UrlEncodedInfoHash(tor)
 	if err != nil {
-		return "", fmt.Errorf("failed to encode infohash in url format: %v", err)
+		return "", err
 	}
 	params := url.Values{
 		"info_hash":  []string{infoHash}, // URL-encode needed!
@@ -57,16 +64,35 @@ func BuildTrackerRequest(tor *tf.TorrentFile, peerId string, port int) (string, 
 	urlStr := tor.Announce + "?" + params.Encode()
 	return urlStr, nil
 }
-func ConnectToTracker(fullURL string) (string, error) {
+
+func ParsePeers(peers []byte) ([]Peer, error) {
+	peerCount := len(peers) / 6
+	peerList := make([]Peer, peerCount)
+	for i := 0; i < peerCount; i++ {
+		peerList[i].IpAdress = [4]byte{peers[i*6], peers[i*6+1], peers[i*6+2], peers[i*6+3]}
+		peerList[i].Port = [2]byte{peers[i*6+4], peers[i*6+5]}
+	}
+	return peerList, nil
+}
+
+func ConnectToTracker(fullURL string) ([]Peer, error) {
 	resp, err := http.Get(fullURL)
 	if err != nil {
-		return "", fmt.Errorf("error sending request to tracker: %v", err)
+		return nil, err
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	fmt.Printf("Response code : %d\n", resp.StatusCode)
+	var tr_response BencondeTrackerResponse
+	err = bencode.Unmarshal(resp.Body, &tr_response)
 	if err != nil {
-		return "", fmt.Errorf("failed to read request body: %v", err)
+		return nil, err
 	}
-	return string(body), nil
+	peers, err := ParsePeers([]byte(tr_response.Peers))
+	if err != nil {
+		return nil, err
+	}
+	return peers, nil
+}
+
+func (peer *Peer) String() string {
+	return fmt.Sprintf("%d.%d.%d.%d:%d", peer.IpAdress[0], peer.IpAdress[1], peer.IpAdress[2], peer.IpAdress[3], (int(peer.Port[0])<<8)+int(peer.Port[1]))
 }

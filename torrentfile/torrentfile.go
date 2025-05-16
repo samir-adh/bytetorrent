@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-
 	"github.com/jackpal/bencode-go"
 )
 
@@ -18,8 +17,9 @@ type bencodeInfo struct {
 }
 
 type bencodeTorrent struct {
-	Announce string      `bencode:"announce"`
-	Info     bencodeInfo `bencode:"info"`
+	Announce     string      `bencode:"announce"`
+	AnnounceList [][]string  `bencode:"announce-list"`
+	Info         bencodeInfo `bencode:"info"`
 }
 
 func Open(r io.Reader) (*bencodeTorrent, error) {
@@ -42,7 +42,7 @@ type TorrentFile struct {
 
 func (bto *bencodeTorrent) InfoHash() ([20]byte, error) {
 	var buf bytes.Buffer
-	err := bencode.Marshal(&buf, &bto.Info)
+	err := bencode.Marshal(&buf, bto.Info)
 	if err != nil {
 		return [20]byte{}, err
 	}
@@ -50,20 +50,30 @@ func (bto *bencodeTorrent) InfoHash() ([20]byte, error) {
 	return hash, nil
 }
 
-
-
 func (bto *bencodeTorrent) PiecesHash() ([][20]byte, error) {
 	// TODO
-	return [][20]byte{}, nil
+	var piecesHash [][20]byte	
+	for i := 0; i < len(bto.Info.Pieces); i += 20 {
+		var hash [20]byte
+		copy(hash[:], bto.Info.Pieces[i:i+20])
+		piecesHash = append(piecesHash, hash)
+	}
+	return piecesHash, nil
 }
 
 func (bto bencodeTorrent) ToTorrentFile() (TorrentFile, error) {
 	var tor TorrentFile
-	tor.Announce = bto.Announce
+	if bto.Announce != "" {
+		tor.Announce = bto.Announce
+	} else if len(bto.AnnounceList) > 0 {
+		tor.Announce = bto.AnnounceList[0][0]
+	} else {
+		return tor, fmt.Errorf("no announce or announce-list found")
+	}
 	var err error
 	tor.InfoHash, err = bto.InfoHash()
 	if err != nil {
-		return tor, fmt.Errorf("failed to get info hash: %v", err)
+		return tor, err
 	}
 	tor.PiecesHash, err = bto.PiecesHash()
 	if err != nil {
@@ -75,7 +85,6 @@ func (bto bencodeTorrent) ToTorrentFile() (TorrentFile, error) {
 	return tor, nil
 }
 
-
 func OpenTorrentFile(filepath string) (*TorrentFile, error) {
 	file, err := os.Open(filepath)
 	if err != nil {
@@ -83,16 +92,13 @@ func OpenTorrentFile(filepath string) (*TorrentFile, error) {
 	}
 	defer file.Close()
 	var bt bencodeTorrent
-	err = bencode.Unmarshal(file,&bt)
+	err = bencode.Unmarshal(file, &bt)
 	if err != nil {
 		return nil, err
 	}
-	tf,err := bt.ToTorrentFile()
+	tf, err := bt.ToTorrentFile()
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert 'bencodeTorrent' type to 'TorrentFile' type: %v", err)
+		return nil, err
 	}
 	return &tf, nil
 }
-
-
-
