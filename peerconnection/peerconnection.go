@@ -25,13 +25,13 @@ func ConnectToPeer(connection *PeerConnection) error {
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
-	h := HandShake{
+	sent_handshake := HandShake{
 		"BitTorrent protocol",
 		connection.TorrentFile.InfoHash,
 		connection.SelfId,
 	}
 	// handshakeMessage := BuildHandshakeMessage(connection.SelfId, string(connection.TorrentFile.InfoHash[:]))
-	_, err = conn.Write(h.Serialize())
+	_, err = conn.Write(sent_handshake.Serialize())
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
@@ -43,6 +43,10 @@ func ConnectToPeer(connection *PeerConnection) error {
 	}
 	// Check the response
 	fmt.Printf("Received response: %x\n", response)
+	response_handshake := UnserializeHandshake(response)
+	if err := VerifyHandshake(&sent_handshake, &response_handshake); err != nil {
+		return tracerr.Wrap(err)
+	}
 	return nil
 }
 
@@ -55,8 +59,29 @@ func (h *HandShake) Serialize() []byte {
 	return handshakeMessage
 }
 
+func UnserializeHandshake(handshake_bytes []byte) HandShake {
+	handshake := HandShake{
+		string(handshake_bytes[1:20]),
+		[20]byte(handshake_bytes[28:48]),
+		[20]byte(handshake_bytes[48:]),
+	}
+	return handshake
+}
+
 type HandShake struct {
 	Protocol string
 	InfoHash [20]byte
 	PeerId   [20]byte
+}
+
+func VerifyHandshake(sent *HandShake, received *HandShake) error {
+	if sent.Protocol != received.Protocol {
+		err := fmt.Errorf("protocol mismatch, expected %s got %s", sent.Protocol, received.Protocol)
+		return err
+	}
+	if sent.InfoHash != received.InfoHash {
+		err := fmt.Errorf("infohash mismatch, expected %s got %s", sent.InfoHash, received.InfoHash)
+		return err
+	}
+	return nil
 }
