@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+
 	"github.com/jackpal/bencode-go"
+	"github.com/ztrue/tracerr"
 )
 
 type bencodeInfo struct {
@@ -52,7 +54,7 @@ func (bto *bencodeTorrent) InfoHash() ([20]byte, error) {
 
 func (bto *bencodeTorrent) PiecesHash() ([][20]byte, error) {
 	// TODO
-	var piecesHash [][20]byte	
+	var piecesHash [][20]byte
 	for i := 0; i < len(bto.Info.Pieces); i += 20 {
 		var hash [20]byte
 		copy(hash[:], bto.Info.Pieces[i:i+20])
@@ -73,11 +75,11 @@ func (bto bencodeTorrent) ToTorrentFile() (TorrentFile, error) {
 	var err error
 	tor.InfoHash, err = bto.InfoHash()
 	if err != nil {
-		return tor, err
+		return tor, tracerr.Wrap(err)
 	}
 	tor.PiecesHash, err = bto.PiecesHash()
 	if err != nil {
-		return tor, err
+		return tor, tracerr.Wrap(err)
 	}
 	tor.PieceLength = bto.Info.PieceLength
 	tor.Length = bto.Info.Length
@@ -88,17 +90,17 @@ func (bto bencodeTorrent) ToTorrentFile() (TorrentFile, error) {
 func OpenTorrentFile(filepath string) (*TorrentFile, error) {
 	file, err := os.Open(filepath)
 	if err != nil {
-		return nil, err
+		return nil, tracerr.Wrap(err)
 	}
 	defer file.Close()
 	var bt bencodeTorrent
 	err = bencode.Unmarshal(file, &bt)
 	if err != nil {
-		return nil, err
+		return nil, tracerr.Wrap(err)
 	}
 	tf, err := bt.ToTorrentFile()
 	if err != nil {
-		return nil, err
+		return nil, tracerr.Wrap(err)
 	}
 	return &tf, nil
 }

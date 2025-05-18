@@ -7,6 +7,7 @@ import (
 	pr "github.com/samir-adh/bytetorrent/peerconnection"
 	tf "github.com/samir-adh/bytetorrent/torrentfile"
 	tr "github.com/samir-adh/bytetorrent/tracker"
+	"github.com/ztrue/tracerr"
 )
 
 func main() {
@@ -14,21 +15,21 @@ func main() {
 	tor, err := tf.OpenTorrentFile(filepath)
 	if err != nil {
 		fmt.Printf("Error opening torrent file: %v\n", err)
-		panic(err)
+		tracerr.PrintSource(err)
 	}
 	self_id, err := tr.RandomPeerId()
 	if err != nil {
-		panic(err)
+		tracerr.PrintSource(err)
 	}
 	port := 6881
 	trackerRequest, err := tr.BuildTrackerRequest(tor, self_id, port)
 	if err != nil {
-		panic(err)
+		tracerr.PrintSource(err)
 	}
 	fmt.Printf("Tracker request: %s\n", trackerRequest)
 	peers, err := tr.ConnectToTracker(trackerRequest)
 	if err != nil {
-		panic(err)
+		tracerr.PrintSource(err)
 	}
 	try_connect_all(peers, self_id, tor)
 }
@@ -41,7 +42,8 @@ func try_connect(peer_connection *pr.PeerConnection) error {
 		return nil
 	}
 }
-func try_connect_all(peers []tr.Peer, self_id string, tor *tf.TorrentFile) {
+
+func try_connect_all(peers []tr.Peer, self_id [20]byte, tor *tf.TorrentFile) {
 	wg := sync.WaitGroup{}
 	for i, peer := range peers {
 		wg.Add(1)
@@ -61,5 +63,4 @@ func try_connect_all(peers []tr.Peer, self_id string, tor *tf.TorrentFile) {
 		}()
 	}
 	wg.Wait()
-	
 }
