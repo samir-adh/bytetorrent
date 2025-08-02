@@ -5,6 +5,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/samir-adh/bytetorrent/message"
 	tf "github.com/samir-adh/bytetorrent/torrentfile"
 	tr "github.com/samir-adh/bytetorrent/tracker"
 	"github.com/ztrue/tracerr"
@@ -25,29 +26,112 @@ func ConnectToPeer(connection *PeerConnection) error {
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
-	sent_handshake := HandShake{
-		"BitTorrent protocol",
-		connection.TorrentFile.InfoHash,
-		connection.SelfId,
-	}
-	// handshakeMessage := BuildHandshakeMessage(connection.SelfId, string(connection.TorrentFile.InfoHash[:]))
-	_, err = conn.Write(sent_handshake.Serialize())
+	defer conn.Close()
+
+	// Send handshake
+	sentHandshake, err := connection.SendHandShake(&conn)
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
-	// Read the response
-	response := make([]byte, 68)
-	_, err = conn.Read(response)
+
+	// Receive handshake
+	receivedHandshake, err := connection.ReceiveHandShake(&conn)
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
+
 	// Check the response
-	fmt.Printf("Received response: %x\n", response)
-	response_handshake := UnserializeHandshake(response)
-	if err := VerifyHandshake(&sent_handshake, &response_handshake); err != nil {
+	if err := VerifyHandshake(sentHandshake, receivedHandshake); err != nil {
+		return tracerr.Wrap(err)
+	}
+	fmt.Printf("Handshake verified with peer %s\n", connection.Peer.String())
+
+	// Receive bitfield
+	bitfield, err := connection.receiveBitfield(&conn)
+	if err != nil {
+		return tracerr.Wrap(err)
+	}
+	fmt.Println("Received bitfield from peer:", bitfield.String())
+
+	// Send interested message
+	if err := connection.sendInterested(&conn); err != nil {
+		return tracerr.Wrap(err)
+	}
+
+	// Receive unchoke message
+	if err := connection.receiveUnchoke(&conn); err != nil {
+		return tracerr.Wrap(err)
+	}
+	fmt.Println("Received unchoke message from peer:", connection.Peer.String())
+
+	return nil
+}
+
+func (p *PeerConnection) sendInterested(conn *net.Conn) error {
+	msg := &message.Message{
+		Id:      message.MsgInterested,
+		Length:  1,
+		Payload: []byte{},
+	}
+	_, err := (*conn).Write(msg.Serialize())
+	if err != nil {
 		return tracerr.Wrap(err)
 	}
 	return nil
+}
+
+func (p *PeerConnection) receiveUnchoke(conn *net.Conn) error {
+	msg, err := message.Read(*conn)
+	if err != nil {
+		return tracerr.Wrap(err)
+	}
+	if msg.Id != message.MsgUnchoke {
+		return fmt.Errorf("expected unchoke message, got %s", msg.Id.String())
+	}
+	fmt.Println("Received unchoke message from peer:", p.Peer.String())
+	return nil
+}
+
+func (p *PeerConnection) receiveBitfield(netconn *net.Conn) (*message.Message, error) {
+	msg, err := message.Read(*netconn)
+	if err != nil {
+		return nil, tracerr.Wrap(err)
+	}
+	if msg.Id != message.MsgBitfield {
+		return nil, fmt.Errorf("expected bitfield message, got %s", msg.Id.String())
+	}
+	return msg, nil
+}
+
+func (p *PeerConnection) SendHandShake(netconn *net.Conn) (*HandShake, error) {
+	handshakeMessage := HandShake{
+		"BitTorrent protocol",
+		p.TorrentFile.InfoHash,
+		p.SelfId,
+	}
+	_, err := (*netconn).Write(handshakeMessage.Serialize())
+	if err != nil {
+		return nil, tracerr.Wrap(err)
+	}
+	return &handshakeMessage, nil
+}
+
+func (p *PeerConnection) ReceiveHandShake(netconn *net.Conn) (*HandShake, error) {
+	response := make([]byte, 68)
+	_, err := (*netconn).Read(response)
+	if err != nil {
+		return nil, tracerr.Wrap(err)
+	}
+	response_handshake := UnserializeHandshake(response)
+	if err := VerifyHandshake(&HandShake{
+		"BitTorrent protocol",
+		p.TorrentFile.InfoHash,
+		p.SelfId,
+	}, &response_handshake); err != nil {
+		return nil, tracerr.Wrap(err)
+	}
+	fmt.Printf("Handshake verified with peer %s\n", p.Peer.String())
+	return &response_handshake, nil
 }
 
 func (h *HandShake) Serialize() []byte {
