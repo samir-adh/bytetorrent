@@ -61,6 +61,7 @@ func Read(r io.Reader) (*Message, error) {
 	}, nil
 }
 
+// String returns a string representation of the messageId
 func (m *messageId) String() string {
 	var message_type string
 	switch *m {
