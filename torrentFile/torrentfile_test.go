@@ -1,4 +1,4 @@
-package torrentfile
+package torrentFile
 
 import (
 	"testing"

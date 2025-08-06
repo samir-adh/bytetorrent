@@ -9,7 +9,7 @@ import (
 	"github.com/jackpal/bencode-go"
 	"github.com/ztrue/tracerr"
 
-	tf "github.com/samir-adh/bytetorrent/torrentfile"
+	tf "github.com/samir-adh/bytetorrent/torrentFile"
 )
 
 type Peer struct {
@@ -74,7 +74,7 @@ func ParsePeers(peers []byte) ([]Peer, error) {
 	return peerList, nil
 }
 
-func ConnectToTracker(fullURL string) ([]Peer, error) {
+func FindPeers(fullURL string) ([]Peer, error) {
 	resp, err := http.Get(fullURL)
 	if err != nil {
 		return nil, tracerr.Wrap(err)

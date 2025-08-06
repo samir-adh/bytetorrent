@@ -14,5 +14,7 @@ TC creates a DS "availablePieces" a list that for each piece record its index, i
 Then for each piece it sends the next available PC to get it if no PC is available skip to the next piece
 Once a PC has finished it returns it to the TC which will write it on the disk
 
+Another approach :
+TC creates an array for which each element contains the state of the corresponding piece, the it spawns the PC instances which will try to download a piece from this array depending of the ones available from their peers
 
 for now our most important problem is to download a piece from a peer, block by block so let's start with this.

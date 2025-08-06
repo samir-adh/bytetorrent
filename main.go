@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sync"
 
-	pr "github.com/samir-adh/bytetorrent/peerconnection"
-	tf "github.com/samir-adh/bytetorrent/torrentfile"
+	pr "github.com/samir-adh/bytetorrent/peerConnection"
+	tf "github.com/samir-adh/bytetorrent/torrentFile"
 	tr "github.com/samir-adh/bytetorrent/tracker"
 	"github.com/ztrue/tracerr"
 )
@@ -27,7 +27,7 @@ func main() {
 		tracerr.PrintSource(err)
 	}
 	fmt.Printf("Tracker request: %s\n", trackerRequest)
-	peers, err := tr.ConnectToTracker(trackerRequest)
+	peers, err := tr.FindPeers(trackerRequest)
 	if err != nil {
 		tracerr.PrintSource(err)
 	}

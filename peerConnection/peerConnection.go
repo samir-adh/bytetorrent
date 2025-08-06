@@ -1,4 +1,4 @@
-package peerconnection
+package peerConnection
 
 import (
 	"fmt"
@@ -6,19 +6,20 @@ import (
 	"time"
 
 	"github.com/samir-adh/bytetorrent/message"
-	tf "github.com/samir-adh/bytetorrent/torrentfile"
+	tf "github.com/samir-adh/bytetorrent/torrentFile"
 	tr "github.com/samir-adh/bytetorrent/tracker"
 	"github.com/ztrue/tracerr"
 )
 
 type PeerConnection struct {
-	SelfId      [20]byte
-	Peer        tr.Peer
-	TorrentFile *tf.TorrentFile
+	SelfId          [20]byte
+	Peer            tr.Peer
+	TorrentFile     *tf.TorrentFile
+	AvailablePieces []int
 }
 
 func ConnectToPeer(connection *PeerConnection) error {
-	conn, err := net.DialTimeout(
+	netConn, err := net.DialTimeout(
 		"tcp",
 		connection.Peer.String(),
 		5*time.Second,
@@ -26,16 +27,44 @@ func ConnectToPeer(connection *PeerConnection) error {
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
-	defer conn.Close()
+	defer netConn.Close()
 
+	err = connection.handshakeExchange(&netConn)
+	if err != nil {
+		return err
+	}
+
+	// Receive bitfieldMessage
+	bitfieldMessage, err := connection.receiveBitfield(&netConn)
+	if err != nil {
+		return tracerr.Wrap(err)
+	}
+	fmt.Println("Received bitfield from peer:", bitfieldMessage.String())
+	connection.AvailablePieces = getAvailablePieces(bitfieldMessage.Payload)
+
+	// Send interested message
+	if err := connection.sendInterested(&netConn); err != nil {
+		return tracerr.Wrap(err)
+	}
+
+	// Receive unchoke message
+	if err := connection.receiveUnchoke(&netConn); err != nil {
+		return tracerr.Wrap(err)
+	}
+	fmt.Println("Received unchoke message from peer:", connection.Peer.String())
+
+	return nil
+}
+
+func (connection *PeerConnection) handshakeExchange(netConn *net.Conn) error {
 	// Send handshake
-	sentHandshake, err := connection.SendHandShake(&conn)
+	sentHandshake, err := connection.SendHandShake(netConn)
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
 
 	// Receive handshake
-	receivedHandshake, err := connection.ReceiveHandShake(&conn)
+	receivedHandshake, err := connection.ReceiveHandShake(netConn)
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
@@ -45,26 +74,19 @@ func ConnectToPeer(connection *PeerConnection) error {
 		return tracerr.Wrap(err)
 	}
 	fmt.Printf("Handshake verified with peer %s\n", connection.Peer.String())
-
-	// Receive bitfield
-	bitfield, err := connection.receiveBitfield(&conn)
-	if err != nil {
-		return tracerr.Wrap(err)
-	}
-	fmt.Println("Received bitfield from peer:", bitfield.String())
-
-	// Send interested message
-	if err := connection.sendInterested(&conn); err != nil {
-		return tracerr.Wrap(err)
-	}
-
-	// Receive unchoke message
-	if err := connection.receiveUnchoke(&conn); err != nil {
-		return tracerr.Wrap(err)
-	}
-	fmt.Println("Received unchoke message from peer:", connection.Peer.String())
-
 	return nil
+}
+
+func getAvailablePieces(bitfield []byte) []int {
+	list := make([]int, 0, 8*len(bitfield))
+	for i, b := range bitfield {
+		for pos := range 8 {
+			if b&(1<<(7-pos)) != 0 {
+				list = append(list, i*8+pos)
+			}
+		}
+	}
+	return list
 }
 
 func (p *PeerConnection) sendInterested(conn *net.Conn) error {
