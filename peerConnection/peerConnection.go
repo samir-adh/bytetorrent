@@ -18,7 +18,7 @@ type PeerConnection struct {
 	AvailablePieces []int
 }
 
-func ConnectToPeer(connection *PeerConnection) error {
+func (connection *PeerConnection) ConnectToPeer() error {
 	netConn, err := net.DialTimeout(
 		"tcp",
 		connection.Peer.String(),

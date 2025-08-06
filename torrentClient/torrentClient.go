@@ -61,44 +61,49 @@ func (client *TorrentClient) Start() {
 	wg := sync.WaitGroup{}
 	for i, peer := range client.Peers {
 		wg.Add(1)
-		go func() {
+		go func(peer tracker.Peer) {
 			peerConnection := peerConnection.PeerConnection{
 				SelfId: client.SelfId,
 				Peer: peer,
 				TorrentFile: &client.File,
 			}
-			
-		}
-	}
-}
-
-func try_connect(peer_connection *peerConnection.PeerConnection) error {
-	err := peerConnection.ConnectToPeer(peer_connection)
-	if err != nil {
-		return err
-	} else {
-		return nil
-	}
-}
-
-func try_connect_all(peers []tracker.Peer, self_id [20]byte, tor *torrentFile.TorrentFile) {
-	wg := sync.WaitGroup{}
-	for i, peer := range peers {
-		wg.Add(1)
-		go func() {
-			peer_connection := &peerConnection.PeerConnection{
-				SelfId:      self_id,
-				Peer:        peer,
-				TorrentFile: tor,
-			}
-			err := try_connect(peer_connection)
+			err := peerConnection.ConnectToPeer()
 			if err != nil {
-				fmt.Printf("Error connecting to peer %d at %s: %v\n", i, peer.String(), err)
-			} else {
-				fmt.Printf("Connected to peer %d at %s\n", i, peer.String())
+				fmt.Printf("failed to download from peer %d : %s\n", i, err)
 			}
 			wg.Done()
-		}()
+		}(peer)
 	}
 	wg.Wait()
 }
+
+// func try_connect(peer_connection *peerConnection.PeerConnection) error {
+// 	err := peerConnection.ConnectToPeer(peer_connection)
+// 	if err != nil {
+// 		return err
+// 	} else {
+// 		return nil
+// 	}
+// }
+
+// func try_connect_all(peers []tracker.Peer, self_id [20]byte, tor *torrentFile.TorrentFile) {
+// 	wg := sync.WaitGroup{}
+// 	for i, peer := range peers {
+// 		wg.Add(1)
+// 		go func() {
+// 			peer_connection := &peerConnection.PeerConnection{
+// 				SelfId:      self_id,
+// 				Peer:        peer,
+// 				TorrentFile: tor,
+// 			}
+// 			err := try_connect(peer_connection)
+// 			if err != nil {
+// 				fmt.Printf("Error connecting to peer %d at %s: %v\n", i, peer.String(), err)
+// 			} else {
+// 				fmt.Printf("Connected to peer %d at %s\n", i, peer.String())
+// 			}
+// 			wg.Done()
+// 		}()
+// 	}
+// 	wg.Wait()
+// }
