@@ -9,7 +9,7 @@ import (
 	"github.com/jackpal/bencode-go"
 	"github.com/ztrue/tracerr"
 
-	tf "github.com/samir-adh/bytetorrent/torrentFile"
+	tf "github.com/samir-adh/bytetorrent/torrentfile"
 )
 
 type Peer struct {
