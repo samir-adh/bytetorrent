@@ -1,59 +1,71 @@
-package peerConnection
+package peerconnection
 
 import (
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/samir-adh/bytetorrent/message"
-	tf "github.com/samir-adh/bytetorrent/torrentFile"
-	tr "github.com/samir-adh/bytetorrent/tracker"
+	"github.com/samir-adh/bytetorrent/piece"
+	"github.com/samir-adh/bytetorrent/torrentfile"
+	"github.com/samir-adh/bytetorrent/tracker"
 	"github.com/ztrue/tracerr"
 )
 
 type PeerConnection struct {
 	SelfId          [20]byte
-	Peer            tr.Peer
-	TorrentFile     *tf.TorrentFile
+	Peer            tracker.Peer
+	TorrentFile     torrentfile.TorrentFile
 	AvailablePieces []int
+	NetConn         net.Conn
 }
 
-func (connection *PeerConnection) ConnectToPeer() error {
+func New(selfId [20]byte, peer tracker.Peer, torrentFile torrentfile.TorrentFile) (*PeerConnection, error) {
+
 	netConn, err := net.DialTimeout(
 		"tcp",
-		connection.Peer.String(),
+		peer.String(),
 		5*time.Second,
 	)
 	if err != nil {
-		return tracerr.Wrap(err)
+		return nil, tracerr.Wrap(err)
 	}
 	defer netConn.Close()
 
+	connection := PeerConnection{
+		SelfId:          selfId,
+		Peer:            peer,
+		TorrentFile:     torrentFile,
+		AvailablePieces: nil,
+		NetConn:         netConn,
+	}
+
 	err = connection.handshakeExchange(&netConn)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Receive bitfieldMessage
 	bitfieldMessage, err := connection.receiveBitfield(&netConn)
 	if err != nil {
-		return tracerr.Wrap(err)
+		return nil, tracerr.Wrap(err)
 	}
 	fmt.Println("Received bitfield from peer:", bitfieldMessage.String())
 	connection.AvailablePieces = getAvailablePieces(bitfieldMessage.Payload)
 
 	// Send interested message
 	if err := connection.sendInterested(&netConn); err != nil {
-		return tracerr.Wrap(err)
+		return nil, tracerr.Wrap(err)
 	}
 
 	// Receive unchoke message
 	if err := connection.receiveUnchoke(&netConn); err != nil {
-		return tracerr.Wrap(err)
+		return nil, tracerr.Wrap(err)
 	}
 	fmt.Println("Received unchoke message from peer:", connection.Peer.String())
 
-	return nil
+	return &connection, nil
 }
 
 func (connection *PeerConnection) handshakeExchange(netConn *net.Conn) error {
@@ -190,4 +202,19 @@ func VerifyHandshake(sent *HandShake, received *HandShake) error {
 		return err
 	}
 	return nil
+}
+
+func (p *PeerConnection) CanHandle(pieceIndex int) bool {
+	for _, index := range p.AvailablePieces {
+		if index == pieceIndex {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *PeerConnection) Download(toDownload piece.Piece, wg *sync.WaitGroup) {
+	fmt.Printf("Peer %s downloading piece %d", p.Peer.String(), toDownload.Index)
+	time.Sleep(1 * time.Millisecond)
+	wg.Done()
 }
