@@ -2,6 +2,7 @@ package torrentclient
 
 import (
 	"fmt"
+	"net/http"
 	"sync"
 
 	"github.com/samir-adh/bytetorrent/peerconnection"
@@ -34,8 +35,10 @@ func New(filepath string) (*TorrentClient, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	httpClient := http.DefaultClient
 	fmt.Printf("Tracker request: %s\n", trackerRequest)
-	peers, err := tracker.FindPeers(trackerRequest)
+	peers, err := tracker.FindPeers(trackerRequest, httpClient)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +89,7 @@ func (client *TorrentClient) initiatePeerConnections() {
 
 func (client *TorrentClient) startDownloading() {
 	wg := sync.WaitGroup{}
-	for _,piece := range client.Queue {
+	for _, piece := range client.Queue {
 		wg.Add(1)
 		for _, peerConnection := range client.PeerConnections {
 			if peerConnection.CanHandle(piece.Index) {
