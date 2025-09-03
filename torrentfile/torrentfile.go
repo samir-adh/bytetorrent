@@ -42,6 +42,9 @@ type TorrentFile struct {
 	Name        string
 }
 
+
+// Computes the info hash of the torrent
+// i.e. the sha1 hash of the .torrent file.
 func (bto *bencodeTorrent) InfoHash() ([20]byte, error) {
 	var buf bytes.Buffer
 	err := bencode.Marshal(&buf, bto.Info)
@@ -52,6 +55,9 @@ func (bto *bencodeTorrent) InfoHash() ([20]byte, error) {
 	return hash, nil
 }
 
+// Takes the pieces field of the .torrent file and divides it
+// into n 20 bytes chucks, the ith chunk corresponding to the sha1
+// hash of the ith piece.  
 func (bto *bencodeTorrent) PiecesHash() ([][20]byte, error) {
 	// TODO
 	var piecesHash [][20]byte
@@ -62,6 +68,8 @@ func (bto *bencodeTorrent) PiecesHash() ([][20]byte, error) {
 	}
 	return piecesHash, nil
 }
+
+
 
 func (bto bencodeTorrent) ToTorrentFile() (TorrentFile, error) {
 	var tor TorrentFile
