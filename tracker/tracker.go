@@ -45,9 +45,11 @@ func UrlEncodedInfoHash(tor *tf.TorrentFile) (string, error) {
 	return string(tor.InfoHash[:]), nil
 }
 
-// func BuildTrackerRequest(baseUrl string, infoHash [20]byte, peerId string, port int, length int) string {
+
+// Builds the url to send to the tracker in order to receive peers,
+// the 'peerId' argument corresponds to the the id of our client
 func BuildTrackerRequest(tor *tf.TorrentFile, peerId [20]byte, port int) (string, error) {
-	infoHash, err := UrlEncodedInfoHash(tor)
+	infoHash, err := UrlEncodedInfoHash(tor) // encode the infohash in UTF-8
 	if err != nil {
 		return "", tracerr.Wrap(err)
 	}

@@ -11,21 +11,21 @@ import (
 	"github.com/ztrue/tracerr"
 )
 
-type bencodeInfo struct {
+type BencodeInfo struct {
 	Pieces      string `bencode:"pieces"`
 	PieceLength int    `bencode:"piece length"`
 	Length      int    `bencode:"length"`
 	Name        string `bencode:"name"`
 }
 
-type bencodeTorrent struct {
+type BencodeTorrent struct {
 	Announce     string      `bencode:"announce"`
 	AnnounceList [][]string  `bencode:"announce-list"`
-	Info         bencodeInfo `bencode:"info"`
+	Info         BencodeInfo `bencode:"info"`
 }
 
-func Open(r io.Reader) (*bencodeTorrent, error) {
-	bto := bencodeTorrent{}
+func Open(r io.Reader) (*BencodeTorrent, error) {
+	bto := BencodeTorrent{}
 	err := bencode.Unmarshal(r, &bto)
 	if err != nil {
 		return nil, err
@@ -34,18 +34,17 @@ func Open(r io.Reader) (*bencodeTorrent, error) {
 }
 
 type TorrentFile struct {
-	Announce    string
-	InfoHash    [20]byte
-	PiecesHash  [][20]byte
-	PieceLength int
-	Length      int
-	Name        string
+	Announce    string // the URL of the tracker
+	InfoHash    [20]byte // sha1 hash of the torrent file
+	PiecesHash  [][20]byte // a hash list, i.e., a concatenation of each piece's SHA-1 hash.
+	PieceLength int // number of bytes per piece. This is commonly 2^8 KiB = 256 KiB = 262,144 B.
+	Length      int // size of the file in bytes 
+	Name        string // suggested filename where the file is to be saved.
 }
-
 
 // Computes the info hash of the torrent
 // i.e. the sha1 hash of the .torrent file.
-func (bto *bencodeTorrent) InfoHash() ([20]byte, error) {
+func (bto *BencodeTorrent) InfoHash() ([20]byte, error) {
 	var buf bytes.Buffer
 	err := bencode.Marshal(&buf, bto.Info)
 	if err != nil {
@@ -57,8 +56,8 @@ func (bto *bencodeTorrent) InfoHash() ([20]byte, error) {
 
 // Takes the pieces field of the .torrent file and divides it
 // into n 20 bytes chucks, the ith chunk corresponding to the sha1
-// hash of the ith piece.  
-func (bto *bencodeTorrent) PiecesHash() ([][20]byte, error) {
+// hash of the ith piece.
+func (bto *BencodeTorrent) PiecesHash() ([][20]byte, error) {
 	// TODO
 	var piecesHash [][20]byte
 	for i := 0; i < len(bto.Info.Pieces); i += 20 {
@@ -69,9 +68,7 @@ func (bto *bencodeTorrent) PiecesHash() ([][20]byte, error) {
 	return piecesHash, nil
 }
 
-
-
-func (bto bencodeTorrent) ToTorrentFile() (TorrentFile, error) {
+func (bto BencodeTorrent) ToTorrentFile() (TorrentFile, error) {
 	var tor TorrentFile
 	if bto.Announce != "" {
 		tor.Announce = bto.Announce
@@ -101,7 +98,7 @@ func OpenTorrentFile(filepath string) (*TorrentFile, error) {
 		return nil, tracerr.Wrap(err)
 	}
 	defer file.Close()
-	var bt bencodeTorrent
+	var bt BencodeTorrent
 	err = bencode.Unmarshal(file, &bt)
 	if err != nil {
 		return nil, tracerr.Wrap(err)
