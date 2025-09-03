@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/samir-adh/bytetorrent/torrentClient"
+	"github.com/samir-adh/bytetorrent/torrentclient"
 	"runtime/debug"
 )
 
@@ -14,7 +14,7 @@ func main() {
 		}
 	}()
 	filepath := "torrentfile/testdata/debian-12.10.0-amd64-netinst.iso.torrent"
-	client, err := torrentClient.New(filepath)
+	client, err := torrentclient.New(filepath)
 	if err != nil {
 		panic(err)
 	}

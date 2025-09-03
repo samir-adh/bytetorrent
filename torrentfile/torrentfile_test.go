@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-var testBencodeTorrent = bencodeTorrent{
+var testBencodeTorrent = BencodeTorrent{
 	Announce:     "anounce",
 	AnnounceList: nil,
-	Info: bencodeInfo{
+	Info: BencodeInfo{
 		Name:        "test-file.txt",
 		Length:      1024,
 		PieceLength: 32768,
@@ -47,12 +47,12 @@ func TestPiecesHash(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed recovering the pieces hashs")
 	}
-	for i,actualHash := range(actualHashByteList) {
-		actualHashHex:=  fmt.Sprintf("%s", actualHash)
+	for i, actualHash := range actualHashByteList {
+		actualHashHex := fmt.Sprintf("%s", actualHash)
 		expectedHash := expectedHashList[i]
 		assertEqual(t, actualHashHex, expectedHash)
 	}
-	
+
 }
 
 func assertEqual(t *testing.T, got, want string) {

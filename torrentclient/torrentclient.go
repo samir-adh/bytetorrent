@@ -1,4 +1,4 @@
-package torrentClient
+package torrentclient
 
 import (
 	"fmt"
