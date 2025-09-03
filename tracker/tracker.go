@@ -3,13 +3,11 @@ package tracker
 import (
 	"crypto/rand"
 	"fmt"
+	"github.com/jackpal/bencode-go"
+	tf "github.com/samir-adh/bytetorrent/torrentfile"
+	"github.com/ztrue/tracerr"
 	"net/http"
 	"net/url"
-
-	"github.com/jackpal/bencode-go"
-	"github.com/ztrue/tracerr"
-
-	tf "github.com/samir-adh/bytetorrent/torrentfile"
 )
 
 type Peer struct {
@@ -45,7 +43,6 @@ func UrlEncodedInfoHash(tor *tf.TorrentFile) (string, error) {
 	return string(tor.InfoHash[:]), nil
 }
 
-
 // Builds the url to send to the tracker in order to receive peers,
 // the 'peerId' argument corresponds to the the id of our client
 func BuildTrackerRequest(tor *tf.TorrentFile, peerId [20]byte, port int) (string, error) {
@@ -76,8 +73,12 @@ func ParsePeers(peers []byte) ([]Peer, error) {
 	return peerList, nil
 }
 
-func FindPeers(fullURL string) ([]Peer, error) {
-	resp, err := http.Get(fullURL)
+type HttpClient interface {
+	Get(url string) (*http.Response, error)
+}
+
+func FindPeers(fullURL string, client HttpClient) ([]Peer, error) {
+	resp, err := client.Get(fullURL)
 	if err != nil {
 		return nil, tracerr.Wrap(err)
 	}
