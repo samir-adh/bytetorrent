@@ -51,11 +51,11 @@ func New(filepath string) (*TorrentClient, error) {
 		})
 	}
 	return &TorrentClient{
-		File:   *tor,
-		SelfId: self_id,
-		Port:   port,
-		Peers:  peers,
-		Queue:  piecesQueue,
+		File:            *tor,
+		SelfId:          self_id,
+		Port:            port,
+		Peers:           peers,
+		Queue:           piecesQueue,
 	}, nil
 }
 func (client *TorrentClient) Start() {
@@ -76,12 +76,13 @@ func (client *TorrentClient) initiatePeerConnections() {
 				client.File,
 			)
 			if err != nil {
-				fmt.Errorf("failed to connect to peer %d : %s\n", i, err)
+				fmt.Printf("failed to connect to peer %d : %s\n", i, err)
 
+			} else {
+				mu.Lock()
+				client.PeerConnections = append(client.PeerConnections, *peerConnection)
+				mu.Unlock()
 			}
-			mu.Lock()
-			client.PeerConnections = append(client.PeerConnections, *peerConnection)
-			mu.Unlock()
 		}(peer)
 	}
 	wg.Wait()
