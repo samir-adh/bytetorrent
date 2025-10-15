@@ -51,20 +51,22 @@ func New(filepath string) (*TorrentClient, error) {
 		})
 	}
 	return &TorrentClient{
-		File:            *tor,
-		SelfId:          self_id,
-		Port:            port,
-		Peers:           peers,
-		Queue:           piecesQueue,
+		File:   *tor,
+		SelfId: self_id,
+		Port:   port,
+		Peers:  peers,
+		Queue:  piecesQueue,
 	}, nil
 }
 func (client *TorrentClient) Start() {
 	client.initiatePeerConnections()
+	client.startDownloading()
 }
 
 func (client *TorrentClient) initiatePeerConnections() {
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
+	fmt.Println("Connecting to peers...")
 	for i, peer := range client.Peers {
 		wg.Add(1)
 		go func(peer tracker.Peer) {
@@ -89,15 +91,20 @@ func (client *TorrentClient) initiatePeerConnections() {
 }
 
 func (client *TorrentClient) startDownloading() {
+	fmt.Println("Starting download...")
 	wg := sync.WaitGroup{}
+	//n := len(client.Queue)
 	for _, piece := range client.Queue {
+		// fmt.Printf("Downloading piece %d of %d\n", i, n)
 		wg.Add(1)
 		for _, peerConnection := range client.PeerConnections {
 			if peerConnection.CanHandle(piece.Index) {
-				go peerConnection.Download(piece, &wg)
+				go peerConnection.Download(piece)
+				break
 			}
-		}
 
+		}
+		wg.Done()
 	}
 	wg.Wait()
 }

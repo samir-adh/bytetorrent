@@ -1,0 +1,16 @@
+# Docker volumes
+downloads1/
+downloads2/
+watch1/
+watch2/
+
+# Generated files
+torrents/*.torrent
+torrents/*.torrent.added
+
+# Test files (optional - uncomment if you want to generate fresh each time)
+# test-files/
+
+# Transmission config (if you add config volumes)
+config1/
+config2/
