@@ -3,7 +3,6 @@ package peerconnection
 import (
 	"fmt"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/samir-adh/bytetorrent/message"
@@ -213,8 +212,7 @@ func (p *PeerConnection) CanHandle(pieceIndex int) bool {
 	return false
 }
 
-func (p *PeerConnection) Download(toDownload piece.Piece, wg *sync.WaitGroup) {
+func (p *PeerConnection) Download(toDownload piece.Piece) {
 	fmt.Printf("Peer %s downloading piece %d", p.Peer.String(), toDownload.Index)
 	time.Sleep(1 * time.Millisecond)
-	wg.Done()
 }

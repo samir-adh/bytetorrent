@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # BitTorrent Tracker
+  tracker:
+    image: lednerb/opentracker-docker
+    container_name: bt-tracker
+    ports:
+      - "6969:6969"
+    networks:
+      - bt-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "6969"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Seeder 1 (has complete file)
+  seeder1:
+    image: linuxserver/transmission:latest
+    container_name: bt-seeder1
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Paris
+    ports:
+      - "9091:9091"    # Web UI
+      - "51413:51413"  # Peer port TCP
+      - "51413:51413/udp"
+    volumes:
+      - ./watch1:/watch
+      - ./downloads1:/downloads
+      - ./test-files:/data
+    networks:
+      - bt-network
+    restart: unless-stopped
+    depends_on:
+      - tracker
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Seeder 2 (leecher/peer)
+  seeder2:
+    image: linuxserver/transmission:latest
+    container_name: bt-seeder2
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Paris
+    ports:
+      - "9092:9091"    # Web UI
+      - "51414:51413"  # Peer port TCP
+      - "51414:51413/udp"
+    volumes:
+      - ./watch2:/watch
+      - ./downloads2:/downloads
+      - ./test-files:/data
+    networks:
+      - bt-network
+    restart: unless-stopped
+    depends_on:
+      - tracker
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  bt-network:
+    driver: bridge
