@@ -13,6 +13,7 @@ echo "=== BitTorrent Test Environment Setup ==="
 # Create directory structure
 echo "Creating directories..."
 mkdir -p watch1 watch2 downloads1 downloads2 test-files torrents
+mkdir -p downloads1/complete downloads1/incomplete downloads2/complete downloads2/incomplete
 
 # Create test file if it doesn't exist
 if [ ! -f test-files/test-file.dat ]; then
@@ -36,7 +37,7 @@ transmission-create -o torrents/test.torrent \
 
 # Copy complete file to seeder1
 echo "Preparing seeder1 with complete file..."
-cp test-files/test-file.dat downloads1/
+cp test-files/test-file.dat downloads1/complete
 
 # Copy torrent to watch directories
 echo "Adding torrents to watch directories..."
