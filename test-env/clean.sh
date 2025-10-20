@@ -10,7 +10,7 @@ echo "=== Cleaning BitTorrent Test Environment ==="
 
 # Stop and remove containers
 echo "Stopping containers..."
-docker-compose down -v
+docker compose down -v
 
 # Remove directories
 echo "Removing directories..."

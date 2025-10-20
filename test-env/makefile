@@ -6,7 +6,7 @@ start:
 
 # Stop containers (keep data)
 stop:
-	@docker-compose stop
+	@docker compose stop
 
 # Clean everything
 clean:
@@ -18,7 +18,7 @@ status:
 
 # Show logs
 logs:
-	@docker-compose logs -f
+	@docker compose logs -f
 
 # Restart containers
 restart: stop start

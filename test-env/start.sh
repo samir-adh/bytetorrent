@@ -23,13 +23,13 @@ fi
 
 # Start Docker containers
 echo "Starting Docker containers..."
-docker-compose up -d
+docker compose up -d
 
 # Wait for services to be ready
 echo "Waiting for services to start..."
 sleep 10
 
-# Create torrent file
+# Create torrent file for containers
 echo "Creating torrent file..."
 transmission-create -o torrents/test.torrent \
     -t http://bt-tracker:6969/announce \

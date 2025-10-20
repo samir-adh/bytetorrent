@@ -1,4 +1,4 @@
-version: '3.8'
+# version: '3.8'
 
 services:
   # BitTorrent Tracker
@@ -69,6 +69,25 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  dev:
+    image: golang:latest
+    container_name: bt-dev
+    working_dir: /workspace
+    volumes:
+      - ../:/workspace 
+      - ./torrents:/torrents
+      - ./dev-downloads:/downloads
+    networks:
+      - bt-network
+    depends_on:
+      - tracker
+      - seeder1
+      - seeder2
+    stdin_open: true
+    tty: true
+    command: sleep infinity
+
 
 networks:
   bt-network:

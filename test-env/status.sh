@@ -9,7 +9,7 @@ echo ""
 
 # Check container status
 echo "Container Status:"
-docker-compose ps
+docker compose ps
 echo ""
 
 # Check seeder1
