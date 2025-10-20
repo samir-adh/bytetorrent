@@ -17,7 +17,7 @@ func main() {
 	// 		debug.PrintStack() // prints full stack trace
 	// 	}
 	// }()
-	filepath := "torrentfile/testdata/debian-13.1.0-amd64-netinst.iso.torrent"
+	filepath := "./test-env/torrents/test.torrent"
 	client, err := torrentclient.New(filepath)
 	if err != nil {
 		tracerr.Print(err)
