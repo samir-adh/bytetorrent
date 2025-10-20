@@ -30,7 +30,7 @@ func New(selfId [20]byte, peer tracker.Peer, torrentFile torrentfile.TorrentFile
 	if err != nil {
 		return nil, tracerr.Wrap(err)
 	}
-	defer netConn.Close()
+	// defer netConn.Close()
 
 	connection := PeerConnection{
 		SelfId:          selfId,
@@ -65,6 +65,10 @@ func New(selfId [20]byte, peer tracker.Peer, torrentFile torrentfile.TorrentFile
 	fmt.Println("Received unchoke message from peer:", connection.Peer.String())
 
 	return &connection, nil
+}
+
+func (connection *PeerConnection) Close() {
+	connection.NetConn.Close()
 }
 
 func (connection *PeerConnection) handshakeExchange(netConn *net.Conn) error {

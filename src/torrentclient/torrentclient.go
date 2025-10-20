@@ -2,6 +2,7 @@ package torrentclient
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"sync"
 
@@ -45,9 +46,10 @@ func New(filepath string) (*TorrentClient, error) {
 	piecesQueue := make([]piece.Piece, len(tor.PiecesHash))
 	for i := range len(tor.PiecesHash) {
 		piecesQueue = append(piecesQueue, piece.Piece{
-			Index: i,
-			State: piece.Missing,
-			Hash:  tor.PiecesHash[i],
+			Index:  i,
+			State:  piece.Missing,
+			Hash:   tor.PiecesHash[i],
+			Length: tor.GetPieceLength(i),
 		})
 	}
 	return &TorrentClient{
@@ -90,6 +92,15 @@ func (client *TorrentClient) initiatePeerConnections() {
 	wg.Wait()
 }
 
+func (client *TorrentClient) downloadRoutine(peer tracker.Peer){
+	peerConnection, err := peerconnection.New(client.SelfId, peer, client.File)
+	if err != nil {
+		log.Printf("Could not connect to peer %s", (&peer).String())
+	}
+	defer peerConnection.Close()
+
+}
+
 func (client *TorrentClient) startDownloading() {
 	fmt.Println("Starting download...")
 	wg := sync.WaitGroup{}
@@ -102,7 +113,6 @@ func (client *TorrentClient) startDownloading() {
 				go peerConnection.Download(piece)
 				break
 			}
-
 		}
 		wg.Done()
 	}

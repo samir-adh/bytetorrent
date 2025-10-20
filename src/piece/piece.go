@@ -12,4 +12,5 @@ type Piece struct {
 	Index int
 	State PieceState
 	Hash  [20]byte
+	Length int
 }

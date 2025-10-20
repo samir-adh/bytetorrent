@@ -34,12 +34,12 @@ func Open(r io.Reader) (*BencodeTorrent, error) {
 }
 
 type TorrentFile struct {
-	Announce    string // the URL of the tracker
-	InfoHash    [20]byte // sha1 hash of the torrent file
+	Announce    string     // the URL of the tracker
+	InfoHash    [20]byte   // sha1 hash of the torrent file
 	PiecesHash  [][20]byte // a hash list, i.e., a concatenation of each piece's SHA-1 hash.
-	PieceLength int // number of bytes per piece. This is commonly 2^8 KiB = 256 KiB = 262,144 B.
-	Length      int // size of the file in bytes 
-	Name        string // suggested filename where the file is to be saved.
+	PieceLength int        // number of bytes per piece. This is commonly 2^8 KiB = 256 KiB = 262,144 B.
+	Length      int        // size of the file in bytes
+	Name        string     // suggested filename where the file is to be saved.
 }
 
 // Computes the info hash of the torrent
@@ -108,4 +108,19 @@ func OpenTorrentFile(filepath string) (*TorrentFile, error) {
 		return nil, tracerr.Wrap(err)
 	}
 	return &tf, nil
+}
+
+func (tf *TorrentFile) GetPieceBounds(index int) (int, int) {
+	start := tf.PieceLength * index
+	end := start + tf.PieceLength
+	if end < tf.Length {
+		return start, tf.PieceLength
+	} else {
+		return start, tf.Length
+	}
+}
+
+func (tf *TorrentFile) GetPieceLength(index int) int {
+	start, end := tf.GetPieceBounds(index)
+	return end - start
 }
