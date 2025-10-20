@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/samir-adh/bytetorrent/peerconnection"
-	"github.com/samir-adh/bytetorrent/piece"
-	"github.com/samir-adh/bytetorrent/torrentfile"
-	"github.com/samir-adh/bytetorrent/tracker"
+	"github.com/samir-adh/bytetorrent/src/peerconnection"
+	"github.com/samir-adh/bytetorrent/src/piece"
+	"github.com/samir-adh/bytetorrent/src/torrentfile"
+	"github.com/samir-adh/bytetorrent/src/tracker"
 )
 
 type TorrentClient struct {

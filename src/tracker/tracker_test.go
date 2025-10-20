@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/samir-adh/bytetorrent/torrentfile"
+	"github.com/samir-adh/bytetorrent/src/torrentfile"
 )
 
 func generateTorrentFile() *torrentfile.TorrentFile {

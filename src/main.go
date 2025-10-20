@@ -5,7 +5,7 @@ import (
 
 	"os"
 
-	"github.com/samir-adh/bytetorrent/torrentclient"
+	"github.com/samir-adh/bytetorrent/src/torrentclient"
 	"github.com/ztrue/tracerr"
 	//"runtime/debug"
 )

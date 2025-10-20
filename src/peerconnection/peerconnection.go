@@ -5,10 +5,10 @@ import (
 	"net"
 	"time"
 
-	"github.com/samir-adh/bytetorrent/message"
-	"github.com/samir-adh/bytetorrent/piece"
-	"github.com/samir-adh/bytetorrent/torrentfile"
-	"github.com/samir-adh/bytetorrent/tracker"
+	"github.com/samir-adh/bytetorrent/src/message"
+	"github.com/samir-adh/bytetorrent/src/piece"
+	"github.com/samir-adh/bytetorrent/src/torrentfile"
+	"github.com/samir-adh/bytetorrent/src/tracker"
 	"github.com/ztrue/tracerr"
 )
 

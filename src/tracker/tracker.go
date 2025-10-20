@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"github.com/jackpal/bencode-go"
-	tf "github.com/samir-adh/bytetorrent/torrentfile"
+	tf "github.com/samir-adh/bytetorrent/src/torrentfile"
 	"github.com/ztrue/tracerr"
 	"net/http"
 	"net/url"
