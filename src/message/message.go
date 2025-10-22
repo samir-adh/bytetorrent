@@ -48,7 +48,7 @@ func Read(r io.Reader) (*Message, error) {
 
 	// Read the rest of the message
 	buf_message := make([]byte, length)
-	_, err = io.ReadFull(r, buf_message)
+	_, err = io.ReadFull(r, buf_message) // the first 4 bytes were already read 
 	if err != nil {
 		return nil, tracerr.Wrap(err)
 	}

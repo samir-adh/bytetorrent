@@ -3,22 +3,25 @@ package torrentclient
 import (
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/samir-adh/bytetorrent/src/peerconnection"
-	"github.com/samir-adh/bytetorrent/src/piece"
+	pc "github.com/samir-adh/bytetorrent/src/piece"
 	"github.com/samir-adh/bytetorrent/src/torrentfile"
-	"github.com/samir-adh/bytetorrent/src/tracker"
+	tr "github.com/samir-adh/bytetorrent/src/tracker"
+	"github.com/ztrue/tracerr"
 )
 
 type TorrentClient struct {
 	File            torrentfile.TorrentFile
 	SelfId          [20]byte
 	Port            int
-	Peers           []tracker.Peer
+	Peers           []tr.Peer
 	PeerConnections []peerconnection.PeerConnection
-	Queue           []piece.Piece
+	Queue           []pc.Piece
 	QueueMutex      sync.Mutex
 }
 
@@ -27,27 +30,27 @@ func New(filepath string) (*TorrentClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	self_id, err := tracker.RandomPeerId()
+	self_id, err := tr.RandomPeerId()
 	if err != nil {
 		return nil, err
 	}
 	port := 6881
-	trackerRequest, err := tracker.BuildTrackerRequest(tor, self_id, port)
+	trackerRequest, err := tr.BuildTrackerRequest(tor, self_id, port)
 	if err != nil {
 		return nil, err
 	}
 
 	httpClient := http.DefaultClient
 	fmt.Printf("Tracker request: %s\n", trackerRequest)
-	peers, err := tracker.FindPeers(trackerRequest, httpClient)
+	peers, err := tr.FindPeers(trackerRequest, httpClient)
 	if err != nil {
 		return nil, err
 	}
-	piecesQueue := make([]piece.Piece, len(tor.PiecesHash))
+	piecesQueue := make([]pc.Piece, len(tor.PiecesHash))
 	for i := range len(tor.PiecesHash) {
-		piecesQueue = append(piecesQueue, piece.Piece{
+		piecesQueue = append(piecesQueue, pc.Piece{
 			Index:  i,
-			State:  piece.Missing,
+			State:  pc.Missing,
 			Hash:   tor.PiecesHash[i],
 			Length: tor.GetPieceLength(i),
 		})
@@ -71,7 +74,7 @@ func (client *TorrentClient) initiatePeerConnections() {
 	fmt.Println("Connecting to peers...")
 	for i, peer := range client.Peers {
 		wg.Add(1)
-		go func(peer tracker.Peer) {
+		go func(peer tr.Peer) {
 			defer wg.Done()
 			// Spawn peer connection
 			peerConnection, err := peerconnection.New(
@@ -92,29 +95,40 @@ func (client *TorrentClient) initiatePeerConnections() {
 	wg.Wait()
 }
 
-func (client *TorrentClient) downloadRoutine(peer tracker.Peer){
-	peerConnection, err := peerconnection.New(client.SelfId, peer, client.File)
+type ErrorMissingPiece struct {
+	PieceIndex int
+}
+
+func (err *ErrorMissingPiece) Error() string {
+	return fmt.Sprintf("Peer doesn't have piece %d")
+}
+
+func (client *TorrentClient) downloadRoutine(peer tr.Peer, piece pc.Piece) (*pc.PieceResult, error) {
+	netConn, err := net.DialTimeout(
+		"tcp",
+		peer.String(),
+		5*time.Second,
+	)
+	if err != nil {
+		return nil, tracerr.Wrap(err)
+	}
+	defer netConn.Close()
+	peerConnection, err := peerconnection.New(client.SelfId, peer, client.File, &netConn)
 	if err != nil {
 		log.Printf("Could not connect to peer %s", (&peer).String())
+		return  nil, err
 	}
-	defer peerConnection.Close()
-
+	if !peerConnection.CanHandle(piece.Index) {
+		return nil, tracerr.Wrap(&ErrorMissingPiece{piece.Index})
+	}
+	pieceResult, err := peerConnection.Download(piece, &netConn)
+	if err != nil {
+		return nil, tracerr.Wrap(err)
+	}
+	return pieceResult, nil
 }
 
 func (client *TorrentClient) startDownloading() {
 	fmt.Println("Starting download...")
-	wg := sync.WaitGroup{}
-	//n := len(client.Queue)
-	for _, piece := range client.Queue {
-		// fmt.Printf("Downloading piece %d of %d\n", i, n)
-		wg.Add(1)
-		for _, peerConnection := range client.PeerConnections {
-			if peerConnection.CanHandle(piece.Index) {
-				go peerConnection.Download(piece)
-				break
-			}
-		}
-		wg.Done()
-	}
-	wg.Wait()
+	
 }
