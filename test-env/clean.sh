@@ -14,7 +14,7 @@ docker compose down -v
 
 # Remove directories
 echo "Removing directories..."
-rm -rf downloads1 downloads2 watch1 watch2 torrents
+rm -rf downloads1 downloads2 watch1 watch2 torrents test-files/test-file.dat
 
 # Optional: Keep test-files directory
 # Uncomment to also remove test files:
