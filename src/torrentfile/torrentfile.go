@@ -114,7 +114,7 @@ func (tf *TorrentFile) getPieceBounds(index int) (int, int) {
 	start := tf.PieceLength * index
 	end := start + tf.PieceLength
 	if end < tf.Length {
-		return start, tf.PieceLength
+		return start, end
 	} else {
 		return start, tf.Length
 	}

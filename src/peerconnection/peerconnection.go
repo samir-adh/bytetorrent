@@ -24,8 +24,8 @@ type PeerConnection struct {
 func New(selfId [20]byte, peer tracker.Peer, infoHash [20]byte, netConn *net.Conn) (*PeerConnection, error) {
 
 	connection := PeerConnection{
-		SelfId: selfId,
-		Peer:   peer,
+		SelfId:          selfId,
+		Peer:            peer,
 		AvailablePieces: nil,
 		InfoHash:        infoHash,
 	}
@@ -200,7 +200,6 @@ func (p *PeerConnection) CanHandle(pieceIndex int) bool {
 	return false
 }
 
-
 func (p *PeerConnection) Download(piece *pc.Piece, netConn *net.Conn) (*pc.PieceResult, error) {
 	bytesDownloaded := 0
 	pieceBuffer := make([]byte, piece.Length)
@@ -210,13 +209,12 @@ func (p *PeerConnection) Download(piece *pc.Piece, netConn *net.Conn) (*pc.Piece
 			blockSize = piece.Length - bytesDownloaded
 		}
 		p.SendBlockRequest(piece, bytesDownloaded, blockSize, netConn)
-		log.Println("Sent block request...")
 		blockData, err := p.ReceiveBlock(piece.Index, bytesDownloaded, blockSize, netConn)
-		log.Println("Received block...")
 		if err != nil {
 			return nil, tracerr.Wrap(err)
 		}
 		copy(pieceBuffer[bytesDownloaded:], blockData)
+		bytesDownloaded += blockSize
 	}
 	return &pc.PieceResult{
 		Index:   piece.Index,

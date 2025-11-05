@@ -1,12 +1,10 @@
 package downloadmanager
 
 import (
-	/*
-	"crypto/sha1"
-	"github.com/ztrue/tracerr"
-	*/
 	"fmt"
+	"github.com/ztrue/tracerr"
 	"log"
+	"crypto/sha1"
 	"math/rand"
 	"net"
 	"sync"
@@ -85,7 +83,7 @@ func (wp *WorkerPool) worker(peer tr.Peer) {
 	}() // Close the connection when the function finishes
 	peerConnection, err := pr.New(wp.selfId, peer, wp.infoHash, &netConn)
 	if err != nil {
-		log.Printf("Could not connect to peer %s", (&peer).String())
+		log.Printf("could not connect to peer %s", (&peer).String())
 		return
 	}
 
@@ -100,14 +98,14 @@ func (wp *WorkerPool) worker(peer tr.Peer) {
 				if _, ok := result.Error.(ErrorMissingPiece); ok {
 					wp.pieceQueue <- piece
 				} else {
-					log.Printf("Error downloading piece %d from peer %d: %s\n", piece.Index, peer.Id, result.Error.Error())
+					log.Printf("error downloading piece %d from peer %d: %s\n", piece.Index, peer.Id, result.Error.Error())
 					close(wp.quit)
 				}
 			}
 			wp.resultQueue <- *result
 
 		case <-wp.quit:
-			fmt.Printf("Connection to peer %d stopping\n", peer.Id)
+			log.Printf("stopping connection to peer %d\n", peer.Id)
 			return
 		}
 	}
@@ -122,15 +120,7 @@ func (err ErrorMissingPiece) Error() string {
 }
 
 func (wp *WorkerPool) downloadPiece(piece *pc.Piece, peerConnection *pr.PeerConnection, netConn *net.Conn) *pc.PieceResult {
-	time.Sleep(time.Duration(rand.Intn(1e3)) * time.Microsecond) // Simulate download time
-	return &pc.PieceResult{
-		Index: piece.Index,
-	}
-	/*
-	// Check that the piece is not already downloaded
-	// if client.Downloaded[piece.Index] {
-	// 	return nil, tracerr.Errorf("piece %d is already downloaded", piece.Index)
-	// }
+
 
 	// Check that the peer has the piece
 	if !peerConnection.CanHandle(piece.Index) {
@@ -142,7 +132,7 @@ func (wp *WorkerPool) downloadPiece(piece *pc.Piece, peerConnection *pr.PeerConn
 	}
 
 	// Try to download the piece
-	fmt.Printf("Downloading piece %d from peer %d\n", piece.Index, peerConnection.Peer.Id)
+	// log.Printf("Downloading piece %d from peer %d\n", piece.Index, peerConnection.Peer.Id)
 	pieceResult, err := peerConnection.Download(piece, netConn)
 	if err != nil {
 		return &pc.PieceResult{
@@ -157,17 +147,11 @@ func (wp *WorkerPool) downloadPiece(piece *pc.Piece, peerConnection *pr.PeerConn
 	if hash != piece.Hash {
 		tracerr.Errorf("hash of downloaded piece %d doesn't match expected hash\n", piece.Index)
 	}
-	fmt.Printf("Downloaded piece %d...\n", piece.Index)
+	fmt.Printf("downloaded piece %d...\n", piece.Index)
 	return pieceResult
-	*/
 
 }
-func (wp *WorkerPool) processJob(job pc.Piece, connection *pr.PeerConnection) pc.PieceResult {
-	time.Sleep(time.Duration(rand.Intn(1e3)) * time.Microsecond) // Simulate download time
-	return pc.PieceResult{
-		Index: job.Index,
-	}
-}
+
 
 func (wp *WorkerPool) Stop() {
 	wp.wg.Wait()
