@@ -1,68 +1,57 @@
 package peerconnection
 
 import (
+	"encoding/binary"
 	"fmt"
+	"log"
 	"net"
-	"time"
 
 	"github.com/samir-adh/bytetorrent/src/message"
-	"github.com/samir-adh/bytetorrent/src/piece"
-	"github.com/samir-adh/bytetorrent/src/torrentfile"
+	pc "github.com/samir-adh/bytetorrent/src/piece"
 	"github.com/samir-adh/bytetorrent/src/tracker"
 	"github.com/ztrue/tracerr"
 )
 
 type PeerConnection struct {
-	SelfId          [20]byte
-	Peer            tracker.Peer
-	TorrentFile     torrentfile.TorrentFile
+	SelfId [20]byte
+	Peer   tracker.Peer
+	// TorrentFile     torrentfile.TorrentFile
 	AvailablePieces []int
-	NetConn         net.Conn
+	InfoHash        [20]byte
+	//NetConn         net.Conn
 }
 
-func New(selfId [20]byte, peer tracker.Peer, torrentFile torrentfile.TorrentFile) (*PeerConnection, error) {
-
-	netConn, err := net.DialTimeout(
-		"tcp",
-		peer.String(),
-		5*time.Second,
-	)
-	if err != nil {
-		return nil, tracerr.Wrap(err)
-	}
-	defer netConn.Close()
+func New(selfId [20]byte, peer tracker.Peer, infoHash [20]byte, netConn *net.Conn) (*PeerConnection, error) {
 
 	connection := PeerConnection{
 		SelfId:          selfId,
 		Peer:            peer,
-		TorrentFile:     torrentFile,
 		AvailablePieces: nil,
-		NetConn:         netConn,
+		InfoHash:        infoHash,
 	}
 
-	err = connection.handshakeExchange(&netConn)
+	err := connection.handshakeExchange(netConn)
 	if err != nil {
 		return nil, err
 	}
 
 	// Receive bitfieldMessage
-	bitfieldMessage, err := connection.receiveBitfield(&netConn)
+	bitfieldMessage, err := connection.receiveBitfield(netConn)
 	if err != nil {
 		return nil, tracerr.Wrap(err)
 	}
-	fmt.Println("Received bitfield from peer:", bitfieldMessage.String())
+	log.Println("Received bitfield from peer:", bitfieldMessage.String())
 	connection.AvailablePieces = getAvailablePieces(bitfieldMessage.Payload)
 
 	// Send interested message
-	if err := connection.sendInterested(&netConn); err != nil {
+	if err := connection.sendInterested(netConn); err != nil {
 		return nil, tracerr.Wrap(err)
 	}
 
 	// Receive unchoke message
-	if err := connection.receiveUnchoke(&netConn); err != nil {
+	if err := connection.receiveUnchoke(netConn); err != nil {
 		return nil, tracerr.Wrap(err)
 	}
-	fmt.Println("Received unchoke message from peer:", connection.Peer.String())
 
 	return &connection, nil
 }
@@ -84,7 +73,6 @@ func (connection *PeerConnection) handshakeExchange(netConn *net.Conn) error {
 	if err := VerifyHandshake(sentHandshake, receivedHandshake); err != nil {
 		return tracerr.Wrap(err)
 	}
-	fmt.Printf("Handshake verified with peer %s\n", connection.Peer.String())
 	return nil
 }
 
@@ -100,33 +88,33 @@ func getAvailablePieces(bitfield []byte) []int {
 	return list
 }
 
-func (p *PeerConnection) sendInterested(conn *net.Conn) error {
+func (p *PeerConnection) sendInterested(netConn *net.Conn) error {
 	msg := &message.Message{
 		Id:      message.MsgInterested,
 		Length:  1,
 		Payload: []byte{},
 	}
-	_, err := (*conn).Write(msg.Serialize())
+	_, err := (*netConn).Write(msg.Serialize())
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
 	return nil
 }
 
-func (p *PeerConnection) receiveUnchoke(conn *net.Conn) error {
-	msg, err := message.Read(*conn)
+func (p *PeerConnection) receiveUnchoke(netConn *net.Conn) error {
+	msg, err := message.Read(*netConn)
 	if err != nil {
 		return tracerr.Wrap(err)
 	}
 	if msg.Id != message.MsgUnchoke {
 		return fmt.Errorf("expected unchoke message, got %s", msg.Id.String())
 	}
-	fmt.Println("Received unchoke message from peer:", p.Peer.String())
+	log.Println("Received unchoke message from peer:", p.Peer.String())
 	return nil
 }
 
-func (p *PeerConnection) receiveBitfield(netconn *net.Conn) (*message.Message, error) {
-	msg, err := message.Read(*netconn)
+func (p *PeerConnection) receiveBitfield(netConn *net.Conn) (*message.Message, error) {
+	msg, err := message.Read(*netConn)
 	if err != nil {
 		return nil, tracerr.Wrap(err)
 	}
@@ -136,34 +124,34 @@ func (p *PeerConnection) receiveBitfield(netconn *net.Conn) (*message.Message, e
 	return msg, nil
 }
 
-func (p *PeerConnection) SendHandShake(netconn *net.Conn) (*HandShake, error) {
+func (p *PeerConnection) SendHandShake(netConn *net.Conn) (*HandShake, error) {
 	handshakeMessage := HandShake{
 		"BitTorrent protocol",
-		p.TorrentFile.InfoHash,
+		p.InfoHash,
 		p.SelfId,
 	}
-	_, err := (*netconn).Write(handshakeMessage.Serialize())
+	_, err := (*netConn).Write(handshakeMessage.Serialize())
 	if err != nil {
 		return nil, tracerr.Wrap(err)
 	}
 	return &handshakeMessage, nil
 }
 
-func (p *PeerConnection) ReceiveHandShake(netconn *net.Conn) (*HandShake, error) {
+func (p *PeerConnection) ReceiveHandShake(netConn *net.Conn) (*HandShake, error) {
 	response := make([]byte, 68)
-	_, err := (*netconn).Read(response)
+	_, err := (*netConn).Read(response)
 	if err != nil {
 		return nil, tracerr.Wrap(err)
 	}
 	response_handshake := UnserializeHandshake(response)
 	if err := VerifyHandshake(&HandShake{
 		"BitTorrent protocol",
-		p.TorrentFile.InfoHash,
+		p.InfoHash,
 		p.SelfId,
 	}, &response_handshake); err != nil {
 		return nil, tracerr.Wrap(err)
 	}
-	fmt.Printf("Handshake verified with peer %s\n", p.Peer.String())
+	log.Printf("Handshake verified with peer %s\n", p.Peer.String())
 	return &response_handshake, nil
 }
 
@@ -212,7 +200,67 @@ func (p *PeerConnection) CanHandle(pieceIndex int) bool {
 	return false
 }
 
-func (p *PeerConnection) Download(toDownload piece.Piece) {
-	fmt.Printf("Peer %s downloading piece %d", p.Peer.String(), toDownload.Index)
-	time.Sleep(1 * time.Millisecond)
+func (p *PeerConnection) Download(piece *pc.Piece, netConn *net.Conn) (*pc.PieceResult, error) {
+	bytesDownloaded := 0
+	pieceBuffer := make([]byte, piece.Length)
+	for bytesDownloaded < piece.Length {
+		blockSize := 16384
+		if bytesDownloaded+blockSize > piece.Length {
+			blockSize = piece.Length - bytesDownloaded
+		}
+		p.SendBlockRequest(piece, bytesDownloaded, blockSize, netConn)
+		blockData, err := p.ReceiveBlock(piece.Index, bytesDownloaded, blockSize, netConn)
+		if err != nil {
+			return nil, tracerr.Wrap(err)
+		}
+		copy(pieceBuffer[bytesDownloaded:], blockData)
+		bytesDownloaded += blockSize
+	}
+	return &pc.PieceResult{
+		Index:   piece.Index,
+		Payload: pieceBuffer,
+	}, nil
+}
+
+func (p *PeerConnection) SendBlockRequest(piece *pc.Piece, bytesDownloaded int, blockSize int, netConn *net.Conn) error {
+	payload := make([]byte, 12)
+	binary.BigEndian.PutUint32(payload[0:4], uint32(piece.Index))
+	binary.BigEndian.PutUint32(payload[4:8], uint32(bytesDownloaded))
+	binary.BigEndian.PutUint32(payload[8:12], uint32(blockSize))
+	msg := message.Message{
+		Id:      message.MsgRequest,
+		Length:  uint32(len(payload) + 1),
+		Payload: payload,
+	}
+	_, err := (*netConn).Write(msg.Serialize())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *PeerConnection) ReceiveBlock(requestIndex int, requestBegin int, blockSize int, netConn *net.Conn) ([]byte, error) {
+	response, err := message.Read(*netConn)
+	if err != nil {
+		return nil, tracerr.Wrap(err)
+	}
+	if response.Id != message.MsgPiece {
+		return nil, tracerr.Errorf("Expected message with Id=7, got Id=%d", response.Id)
+	}
+	payload := response.Payload
+
+	if index := int(binary.BigEndian.Uint32(payload[0:4])); index != requestIndex {
+		return nil, tracerr.Errorf("Expected block from piece %d, got from piece %d", requestIndex, index)
+	}
+
+	if begin := int(binary.BigEndian.Uint32(payload[4:8])); begin != requestBegin {
+		return nil, tracerr.Errorf("Begin mismatch")
+	}
+	blockData := payload[8:]
+
+	if len(blockData) != blockSize {
+		return nil, tracerr.Errorf("Mismatch in expected block size")
+	}
+
+	return blockData, nil
 }

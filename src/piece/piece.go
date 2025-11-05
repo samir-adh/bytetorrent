@@ -9,7 +9,14 @@ const (
 )
 
 type Piece struct {
-	Index int
-	State PieceState
-	Hash  [20]byte
+	Index  int
+	State  PieceState
+	Hash   [20]byte
+	Length int
+}
+
+type PieceResult struct {
+	Index   int
+	Payload []byte
+	Error   error
 }
