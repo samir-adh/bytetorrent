@@ -1,8 +1,10 @@
 package torrentclient
 
 import (
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	mgr "github.com/samir-adh/bytetorrent/src/downloadmanager"
 	pc "github.com/samir-adh/bytetorrent/src/piece"
@@ -16,6 +18,7 @@ type TorrentClient struct {
 	Port     int
 	Peers    []tr.Peer
 	Pieces   []pc.Piece
+	FileName string
 }
 
 func New(filepath string) (*TorrentClient, error) {
@@ -52,18 +55,36 @@ func New(filepath string) (*TorrentClient, error) {
 	for i := range downloaded {
 		downloaded[i] = false
 	}
-	return &TorrentClient{
+
+return &TorrentClient{
 		InfoHash: tor.InfoHash,
 		SelfId:   self_id,
 		Port:     port,
 		Peers:    peers,
 		Pieces:   pieces,
+		FileName: tor.Name,
 	}, nil
 }
 
-func (client *TorrentClient) Download() {
-	wp := mgr.NewWorkerPool(client.SelfId, client.InfoHash, client.Peers, client.Pieces)
+func (client *TorrentClient) Download() error {
+	// Create file to store the downloaded data
+	file, err := os.Create(fmt.Sprintf("./downloads/%s",client.FileName))
+	if err != nil {
+		return err
+	}
+	fileSize := 0
+	for _, piece := range client.Pieces {
+		fileSize += piece.Length
+	}
+	log.Printf("creating file of size %d bytes", fileSize)
+	err = file.Truncate(int64(fileSize))
+	if err != nil {
+		return err
+	}	
+	defer file.Close()
+		wp := mgr.NewWorkerPool(client.SelfId, client.InfoHash, client.Peers, client.Pieces, file)
 	wp.Start()
+	return nil
 }
 
 /*

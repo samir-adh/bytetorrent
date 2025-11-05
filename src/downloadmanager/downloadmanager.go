@@ -1,14 +1,15 @@
 package downloadmanager
 
 import (
-	"fmt"
-	"github.com/ztrue/tracerr"
-	"log"
 	"crypto/sha1"
-	"math/rand"
+	"fmt"
+	"log"
 	"net"
+	"os"
 	"sync"
 	"time"
+
+	"github.com/ztrue/tracerr"
 
 	pr "github.com/samir-adh/bytetorrent/src/peerconnection"
 	pc "github.com/samir-adh/bytetorrent/src/piece"
@@ -22,10 +23,13 @@ type WorkerPool struct {
 	pieceQueue  chan pc.Piece
 	resultQueue chan pc.PieceResult
 	quit        chan bool
+	completed 	[]bool
+	completedMu sync.Mutex
 	wg          sync.WaitGroup
+	file 	  *os.File
 }
 
-func NewWorkerPool(selfId [20]byte, infoHash [20]byte, peers []tr.Peer, pieces []pc.Piece) *WorkerPool {
+func NewWorkerPool(selfId [20]byte, infoHash [20]byte, peers []tr.Peer, pieces []pc.Piece, file *os.File) *WorkerPool {
 	jobQueue := make(chan pc.Piece, len(pieces))
 	for _, piece := range pieces {
 		jobQueue <- piece
@@ -37,6 +41,8 @@ func NewWorkerPool(selfId [20]byte, infoHash [20]byte, peers []tr.Peer, pieces [
 		pieceQueue:  jobQueue,
 		resultQueue: make(chan pc.PieceResult, len(jobQueue)),
 		quit:        make(chan bool),
+		file : 	  file,
+		completed: make([]bool, len(pieces)),
 	}
 
 }
@@ -55,9 +61,29 @@ func (wp *WorkerPool) Start() {
 
 func (wp *WorkerPool) collectPieces() {
 	for result := range wp.resultQueue {
-		fmt.Printf("writing data of piece %d \n", result.Index)
-		time.Sleep(time.Duration(rand.Intn(1e3)) * time.Microsecond) // Simulate download time
-		if len(wp.resultQueue) == 0 && len(wp.pieceQueue) == 0 {
+		if result.Error != nil {
+			close(wp.quit)
+			log.Printf("failed to download piece %d data, aborting torrent : %s\n",result.Index, result.Error)
+		}
+		log.Printf("writing data of piece %d \n", result.Index)
+		// time.Sleep(time.Duration(rand.Intn(1e3)) * time.Microsecond) // Simulate download time
+		startTime := time.Now()
+		pieceDefaultSize := 262144
+		_, err := wp.file.WriteAt(result.Payload, int64(result.Index * pieceDefaultSize))
+		ellapsedTime := time.Since(startTime)
+		log.Printf("writing piece data took %dms\n", ellapsedTime.Milliseconds())
+		if err != nil {
+			close(wp.quit)
+			log.Printf("failed to write piece data, aborting torrent : %s\n", err)
+		}
+		wp.completedMu.Lock()
+		wp.completed[result.Index] = true
+		downloadIsCompleted := true
+		for _,pieceIsCompleted := range(wp.completed)  {
+			downloadIsCompleted = downloadIsCompleted && pieceIsCompleted
+		}
+		wp.completedMu.Unlock()
+		if downloadIsCompleted {
 			close(wp.quit)
 			return
 		}
@@ -124,11 +150,7 @@ func (wp *WorkerPool) downloadPiece(piece *pc.Piece, peerConnection *pr.PeerConn
 
 	// Check that the peer has the piece
 	if !peerConnection.CanHandle(piece.Index) {
-		return &pc.PieceResult{
-			Index:   piece.Index,
-			Payload: nil,
-			Error:   ErrorMissingPiece{piece.Index},
-		}
+		wp.pieceQueue <- *piece
 	}
 
 	// Try to download the piece
