@@ -110,7 +110,7 @@ func OpenTorrentFile(filepath string) (*TorrentFile, error) {
 	return &tf, nil
 }
 
-func (tf *TorrentFile) GetPieceBounds(index int) (int, int) {
+func (tf *TorrentFile) getPieceBounds(index int) (int, int) {
 	start := tf.PieceLength * index
 	end := start + tf.PieceLength
 	if end < tf.Length {
@@ -121,6 +121,6 @@ func (tf *TorrentFile) GetPieceBounds(index int) (int, int) {
 }
 
 func (tf *TorrentFile) GetPieceLength(index int) int {
-	start, end := tf.GetPieceBounds(index)
+	start, end := tf.getPieceBounds(index)
 	return end - start
 }

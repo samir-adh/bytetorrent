@@ -23,5 +23,5 @@ func main() {
 		tracerr.Print(err)
 		os.Exit(1)
 	}
-	client.Start()
+	client.Download()
 }

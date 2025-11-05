@@ -18,4 +18,5 @@ type Piece struct {
 type PieceResult struct {
 	Index   int
 	Payload []byte
+	Error   error
 }

@@ -1,28 +1,29 @@
 package torrentclient
 
 import (
-	"fmt"
+	/*
+	"crypto/sha1"
 	"log"
 	"net"
-	"net/http"
 	"sync"
 	"time"
-
-	"github.com/samir-adh/bytetorrent/src/peerconnection"
+	"github.com/ztrue/tracerr"
+	pr "github.com/samir-adh/bytetorrent/src/peerconnection"
+	*/
+	"fmt"
+	"net/http"
 	pc "github.com/samir-adh/bytetorrent/src/piece"
 	"github.com/samir-adh/bytetorrent/src/torrentfile"
 	tr "github.com/samir-adh/bytetorrent/src/tracker"
-	"github.com/ztrue/tracerr"
+	mgr "github.com/samir-adh/bytetorrent/src/downloadmanager"
 )
 
 type TorrentClient struct {
-	File            torrentfile.TorrentFile
-	SelfId          [20]byte
-	Port            int
-	Peers           []tr.Peer
-	PeerConnections []peerconnection.PeerConnection
-	Queue           []pc.Piece
-	QueueMutex      sync.Mutex
+	InfoHash [20]byte
+	SelfId   [20]byte
+	Port     int
+	Peers    []tr.Peer
+	Pieces   []pc.Piece
 }
 
 func New(filepath string) (*TorrentClient, error) {
@@ -46,89 +47,165 @@ func New(filepath string) (*TorrentClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	piecesQueue := make([]pc.Piece, len(tor.PiecesHash))
+	pieces := make([]pc.Piece, len(tor.PiecesHash))
 	for i := range len(tor.PiecesHash) {
-		piecesQueue = append(piecesQueue, pc.Piece{
+		pieces[i] = pc.Piece{
 			Index:  i,
 			State:  pc.Missing,
 			Hash:   tor.PiecesHash[i],
 			Length: tor.GetPieceLength(i),
-		})
+		}
+	}
+	downloaded := make([]bool, len(tor.PiecesHash))
+	for i := range downloaded {
+		downloaded[i] = false
 	}
 	return &TorrentClient{
-		File:   *tor,
-		SelfId: self_id,
-		Port:   port,
-		Peers:  peers,
-		Queue:  piecesQueue,
+		InfoHash: tor.InfoHash,
+		SelfId:   self_id,
+		Port:     port,
+		Peers:    peers,
+		Pieces:   pieces,
 	}, nil
 }
-func (client *TorrentClient) Start() {
-	client.initiatePeerConnections()
-	client.startDownloading()
+
+func (client *TorrentClient) Download() {
+	wp := mgr.NewWorkerPool(client.SelfId, client.InfoHash, client.Peers, client.Pieces)
+	wp.Start()
 }
 
-func (client *TorrentClient) initiatePeerConnections() {
-	wg := sync.WaitGroup{}
-	mu := sync.Mutex{}
-	fmt.Println("Connecting to peers...")
-	for i, peer := range client.Peers {
-		wg.Add(1)
-		go func(peer tr.Peer) {
-			defer wg.Done()
-			// Spawn peer connection
-			peerConnection, err := peerconnection.New(
-				client.SelfId,
-				peer,
-				client.File,
-			)
-			if err != nil {
-				fmt.Printf("failed to connect to peer %d : %s\n", i, err)
+/*
 
-			} else {
-				mu.Lock()
-				client.PeerConnections = append(client.PeerConnections, *peerConnection)
-				mu.Unlock()
-			}
-		}(peer)
+type Downloaded struct {
+	tab []bool
+	mu  sync.Mutex
+}
+
+
+func (client *TorrentClient) Download() {
+	dw := Downloaded{
+		make([]bool, len(client.Pieces)),
+		sync.Mutex{},
 	}
-	wg.Wait()
+	workQueue := make(chan *pc.Piece, len(client.Pieces))
+	results := make(chan *pc.PieceResult, len(client.Pieces))
+	for _, peer := range client.Peers {
+		client.downloadRoutine(peer, &dw, workQueue, results)
+	}
 }
 
 type ErrorMissingPiece struct {
 	PieceIndex int
 }
 
-func (err *ErrorMissingPiece) Error() string {
-	return fmt.Sprintf("Peer doesn't have piece %d")
+func (err ErrorMissingPiece) Error() string {
+	return fmt.Sprintf("Peer doesn't have piece %d", err.PieceIndex)
 }
 
-func (client *TorrentClient) downloadRoutine(peer tr.Peer, piece pc.Piece) (*pc.PieceResult, error) {
+func (client *TorrentClient) downloadRoutine(peer tr.Peer, downloaded *Downloaded, work chan *pc.Piece, results chan*pc.PieceResult) {
+	// Initiate connection with peer
 	netConn, err := net.DialTimeout(
 		"tcp",
 		peer.String(),
 		5*time.Second,
 	)
 	if err != nil {
-		return nil, tracerr.Wrap(err)
+		log.Print(err.Error())
+		return
 	}
-	defer netConn.Close()
-	peerConnection, err := peerconnection.New(client.SelfId, peer, client.File, &netConn)
+	defer func() {
+		if err := netConn.Close(); err != nil {
+			log.Print(err.Error())
+		}
+	}() // Close the connection when the function finishes
+	peerConnection, err := pr.New(client.SelfId, peer, client.InfoHash, &netConn)
 	if err != nil {
 		log.Printf("Could not connect to peer %s", (&peer).String())
-		return  nil, err
+		return
 	}
-	if !peerConnection.CanHandle(piece.Index) {
-		return nil, tracerr.Wrap(&ErrorMissingPiece{piece.Index})
+
+	// Start trying to download pieces
+	fmt.Printf("There are %d pieces in the file\n", len(client.Pieces))
+	for _, piece := range client.Pieces {
+		pieceResult, err := client.downloadPiece(piece, peerConnection, &netConn)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+		downloaded.mu.Lock()
+		downloaded.tab[piece.Index] = true
+		downloaded.mu.Unlock()
+		results <- pieceResult
 	}
-	pieceResult, err := peerConnection.Download(piece, &netConn)
-	if err != nil {
-		return nil, tracerr.Wrap(err)
-	}
-	return pieceResult, nil
 }
 
-func (client *TorrentClient) startDownloading() {
-	fmt.Println("Starting download...")
-	
+func (client *TorrentClient) downloadPiece(piece *pc.Piece, peerConnection *pr.PeerConnection, netConn *net.Conn) (*pc.PieceResult, error) {
+	// Check that the piece is not already downloaded
+	// if client.Downloaded[piece.Index] {
+	// 	return nil, tracerr.Errorf("piece %d is already downloaded", piece.Index)
+	// }
+
+	// Check that the peer has the piece
+	if !peerConnection.CanHandle(piece.Index) {
+		return nil, ErrorMissingPiece{piece.Index}
+	}
+
+	// Try to download the piece
+	fmt.Printf("Downloading piece %d...\n", piece.Index)
+	pieceResult, err := peerConnection.Download(piece, netConn)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check integrity
+	hash := sha1.Sum(pieceResult.Payload)
+	if hash != piece.Hash {
+		tracerr.Errorf("hash of downloaded piece %d doesn't match expected hash\n", piece.Index)
+	}
+	fmt.Printf("Downloaded piece %d...\n", piece.Index)
+	return pieceResult, nil
+
 }
+
+*/
+
+/*
+Plan to make the download concurrent
+
+What are the steps :
+
+	we get a list of all pieces
+
+	turn this list into a work queue
+
+	for each peer we start a coroutine
+
+	for each peer coroutine we pick a piece and try to download it
+
+	if the peer has it
+		we download it
+		we write it to the disk (maybe we shoud use a collector coroutine to collect the pieces asyncsly and write them)
+
+	else
+		we put it back to the work queue
+
+	pick the next piece
+
+Questions :
+
+	how do long do each peer coroutine need to run ?
+	We stop them when the are no more pieces in the work queue
+	-> that's a first solution but the program will keep running forever if a piece is impossible to download
+
+	how do we handle the writing of the pieces on the disk ?
+	- we can write just after downloading a piece in the coroutine
+	- we can send the piece data to a object like a collector that will write in the disk
+	- maybe something else ?
+
+What we shoud do now :
+	take a look a go concurency patterns to try to find a pattern that solves our problems
+	implement it as it even if it looks overengineered
+	(optional) optimize it
+
+	i have take a look at a few patterns and the worker pool pattern seems to be the most suitable
+*/

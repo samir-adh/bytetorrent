@@ -3,14 +3,16 @@ package tracker
 import (
 	"crypto/rand"
 	"fmt"
+	"net/http"
+	"net/url"
+
 	"github.com/jackpal/bencode-go"
 	tf "github.com/samir-adh/bytetorrent/src/torrentfile"
 	"github.com/ztrue/tracerr"
-	"net/http"
-	"net/url"
 )
 
 type Peer struct {
+	Id       int
 	IpAdress [4]byte ""
 	Port     [2]byte
 }
@@ -67,6 +69,7 @@ func ParsePeers(peers []byte) ([]Peer, error) {
 	peerCount := len(peers) / 6
 	peerList := make([]Peer, peerCount)
 	for i := range peerCount {
+		peerList[i].Id = i
 		peerList[i].IpAdress = [4]byte{peers[i*6], peers[i*6+1], peers[i*6+2], peers[i*6+3]}
 		peerList[i].Port = [2]byte{peers[i*6+4], peers[i*6+5]}
 	}
@@ -95,6 +98,11 @@ func FindPeers(fullURL string, client HttpClient) ([]Peer, error) {
 	return peers, nil
 }
 
-func (peer *Peer) String() string {
+func (peer *Peer) AddressToStr() string {
 	return fmt.Sprintf("%d.%d.%d.%d:%d", peer.IpAdress[0], peer.IpAdress[1], peer.IpAdress[2], peer.IpAdress[3], (int(peer.Port[0])<<8)+int(peer.Port[1]))
+
+}
+
+func (peer *Peer) String() string {
+	return fmt.Sprintf("%d (%d.%d.%d.%d:%d)", peer.Id, peer.IpAdress[0], peer.IpAdress[1], peer.IpAdress[2], peer.IpAdress[3], (int(peer.Port[0])<<8)+int(peer.Port[1]))
 }

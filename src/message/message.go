@@ -45,7 +45,9 @@ func Read(r io.Reader) (*Message, error) {
 		return nil, tracerr.Wrap(err)
 	}
 	length := binary.BigEndian.Uint32(buf_length)
-
+	if length <= 0 {
+		return nil, tracerr.Errorf("Failed to read message with length %d", length)
+	}
 	// Read the rest of the message
 	buf_message := make([]byte, length)
 	_, err = io.ReadFull(r, buf_message) // the first 4 bytes were already read 
@@ -98,7 +100,7 @@ func (m *Message) String() string {
 }
 
 func (m *Message) Serialize() []byte {
-	buf := make([]byte, 5+m.Length)
+	buf := make([]byte, 4+m.Length)
 	binary.BigEndian.PutUint32(buf[0:4], m.Length)
 	buf[4] = byte(m.Id)
 	copy(buf[5:], m.Payload)
