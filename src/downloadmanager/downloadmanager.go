@@ -154,7 +154,7 @@ func (wp *WorkerPool) downloadPiece(piece *pc.Piece, peerConnection *pr.PeerConn
 	}
 
 	// Try to download the piece
-	// log.Printf("Downloading piece %d from peer %d\n", piece.Index, peerConnection.Peer.Id)
+	log.Printf("downloading piece %d from peer %d\n", piece.Index, peerConnection.Peer.Id)
 	pieceResult, err := peerConnection.Download(piece, netConn)
 	if err != nil {
 		return &pc.PieceResult{
@@ -169,7 +169,7 @@ func (wp *WorkerPool) downloadPiece(piece *pc.Piece, peerConnection *pr.PeerConn
 	if hash != piece.Hash {
 		tracerr.Errorf("hash of downloaded piece %d doesn't match expected hash\n", piece.Index)
 	}
-	fmt.Printf("downloaded piece %d...\n", piece.Index)
+	// log.Printf("downloaded piece %d...\n", piece.Index)
 	return pieceResult
 
 }
