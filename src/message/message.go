@@ -95,7 +95,6 @@ func (m *Message) String() string {
 	return "Message{" +
 		"Id: " + m.Id.String() +
 		", Length: " + strconv.Itoa(int(m.Length)) +
-		//", Payload: " + string(m.Payload) +
 		"}"
 }
 

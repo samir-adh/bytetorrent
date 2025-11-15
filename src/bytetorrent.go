@@ -1,22 +1,13 @@
 package main
 
 import (
-	// "fmt"
-
 	"os"
 
 	"github.com/samir-adh/bytetorrent/src/torrentclient"
 	"github.com/ztrue/tracerr"
-	//"runtime/debug"
 )
 
 func main() {
-	// defer func() {
-	// 	if r := recover(); r != nil {
-	// 		fmt.Printf("panic recovered: %v\n", r)
-	// 		debug.PrintStack() // prints full stack trace
-	// 	}
-	// }()
 	filepath := "./test-env/torrents/test.torrent"
 	if len(os.Args) > 1 {
 		filepath = os.Args[1]
