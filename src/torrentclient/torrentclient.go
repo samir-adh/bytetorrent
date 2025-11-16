@@ -2,11 +2,11 @@ package torrentclient
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 
 	mgr "github.com/samir-adh/bytetorrent/src/downloadmanager"
+	"github.com/samir-adh/bytetorrent/src/log"
 	pc "github.com/samir-adh/bytetorrent/src/piece"
 	"github.com/samir-adh/bytetorrent/src/torrentfile"
 	tr "github.com/samir-adh/bytetorrent/src/tracker"
@@ -19,9 +19,10 @@ type TorrentClient struct {
 	Peers    []tr.Peer
 	Pieces   []pc.Piece
 	FileName string
+	Logger   *log.Logger
 }
 
-func New(filepath string) (*TorrentClient, error) {
+func New(filepath string, logger *log.Logger) (*TorrentClient, error) {
 	tor, err := torrentfile.OpenTorrentFile(filepath)
 	if err != nil {
 		return nil, err
@@ -37,7 +38,7 @@ func New(filepath string) (*TorrentClient, error) {
 	}
 
 	httpClient := http.DefaultClient
-	log.Printf("tracker request: %s\n", trackerRequest)
+	logger.Printf(log.HighVerbose, "tracker request: %s\n", trackerRequest)
 	peers, err := tr.FindPeers(trackerRequest, httpClient)
 	if err != nil {
 		return nil, err
@@ -55,20 +56,22 @@ func New(filepath string) (*TorrentClient, error) {
 	for i := range downloaded {
 		downloaded[i] = false
 	}
+	logger.Printf(log.LowVerbose, "Downloading %s", tor.Name)
 
-return &TorrentClient{
+	return &TorrentClient{
 		InfoHash: tor.InfoHash,
 		SelfId:   self_id,
 		Port:     port,
 		Peers:    peers,
 		Pieces:   pieces,
 		FileName: tor.Name,
+		Logger:   logger,
 	}, nil
 }
 
 func (client *TorrentClient) Download() error {
 	// Create file to store the downloaded data
-	file, err := os.Create(fmt.Sprintf("./downloads/%s",client.FileName))
+	file, err := os.Create(fmt.Sprintf("./downloads/%s", client.FileName))
 	if err != nil {
 		return err
 	}
@@ -76,13 +79,13 @@ func (client *TorrentClient) Download() error {
 	for _, piece := range client.Pieces {
 		fileSize += piece.Length
 	}
-	log.Printf("creating file of size %d bytes", fileSize)
+	client.Logger.Printf(log.HighVerbose, "creating file of size %d bytes", fileSize)
 	err = file.Truncate(int64(fileSize))
 	if err != nil {
 		return err
-	}	
+	}
 	defer file.Close()
-		wp := mgr.NewWorkerPool(client.SelfId, client.InfoHash, client.Peers, client.Pieces, file)
+	wp := mgr.NewWorkerPool(client.SelfId, client.InfoHash, client.Peers, client.Pieces, file, client.Logger)
 	wp.Start()
 	return nil
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 
+	"github.com/samir-adh/bytetorrent/src/log"
 	"github.com/samir-adh/bytetorrent/src/torrentclient"
 	"github.com/ztrue/tracerr"
 )
@@ -12,7 +13,9 @@ func main() {
 	if len(os.Args) > 1 {
 		filepath = os.Args[1]
 	}
-	client, err := torrentclient.New(filepath)
+	verboseLevel := log.LowVerbose
+	logger := log.Logger{Verbose: verboseLevel}
+	client, err := torrentclient.New(filepath, &logger)
 	if err != nil {
 		tracerr.Print(err)
 		os.Exit(1)

@@ -3,9 +3,10 @@ package peerconnection
 import (
 	"encoding/binary"
 	"fmt"
-	"log"
 	"net"
 
+	"github.com/samir-adh/bytetorrent/src/blocksdownload"
+	"github.com/samir-adh/bytetorrent/src/log"
 	"github.com/samir-adh/bytetorrent/src/message"
 	pc "github.com/samir-adh/bytetorrent/src/piece"
 	"github.com/samir-adh/bytetorrent/src/tracker"
@@ -15,19 +16,19 @@ import (
 type PeerConnection struct {
 	SelfId [20]byte
 	Peer   tracker.Peer
-	// TorrentFile     torrentfile.TorrentFile
 	AvailablePieces []int
 	InfoHash        [20]byte
-	//NetConn         net.Conn
+	logger *log.Logger
 }
 
-func New(selfId [20]byte, peer tracker.Peer, infoHash [20]byte, netConn *net.Conn) (*PeerConnection, error) {
+func New(selfId [20]byte, peer tracker.Peer, infoHash [20]byte, netConn *net.Conn, logger *log.Logger) (*PeerConnection, error) {
 
 	connection := PeerConnection{
 		SelfId:          selfId,
 		Peer:            peer,
 		AvailablePieces: nil,
 		InfoHash:        infoHash,
+		logger: logger,
 	}
 
 	err := connection.handshakeExchange(netConn)
@@ -40,7 +41,7 @@ func New(selfId [20]byte, peer tracker.Peer, infoHash [20]byte, netConn *net.Con
 	if err != nil {
 		return nil, tracerr.Wrap(err)
 	}
-	log.Println("Received bitfield from peer:", bitfieldMessage.String())
+	logger.Println(log.HighVerbose,"Received bitfield from peer:", bitfieldMessage.String())
 	connection.AvailablePieces = getAvailablePieces(bitfieldMessage.Payload)
 
 	// Send interested message
@@ -109,7 +110,7 @@ func (p *PeerConnection) receiveUnchoke(netConn *net.Conn) error {
 	if msg.Id != message.MsgUnchoke {
 		return fmt.Errorf("expected unchoke message, got %s", msg.Id.String())
 	}
-	log.Println("Received unchoke message from peer:", p.Peer.String())
+	p.logger.Println(log.HighVerbose,"Received unchoke message from peer:", p.Peer.String())
 	return nil
 }
 
@@ -151,7 +152,7 @@ func (p *PeerConnection) ReceiveHandShake(netConn *net.Conn) (*HandShake, error)
 	}, &response_handshake); err != nil {
 		return nil, tracerr.Wrap(err)
 	}
-	log.Printf("Handshake verified with peer %s\n", p.Peer.String())
+	p.logger.Printf(log.HighVerbose,"Handshake verified with peer %s\n", p.Peer.String())
 	return &response_handshake, nil
 }
 
@@ -201,8 +202,11 @@ func (p *PeerConnection) CanHandle(pieceIndex int) bool {
 }
 
 func (p *PeerConnection) Download(piece *pc.Piece, netConn *net.Conn) (*pc.PieceResult, error) {
+	return blocksdownload.DownloadPiece(piece, netConn)
+	/*
 	bytesDownloaded := 0
 	pieceBuffer := make([]byte, piece.Length)
+	
 	for bytesDownloaded < piece.Length {
 		blockSize := 16384
 		if bytesDownloaded+blockSize > piece.Length {
@@ -220,6 +224,7 @@ func (p *PeerConnection) Download(piece *pc.Piece, netConn *net.Conn) (*pc.Piece
 		Index:   piece.Index,
 		Payload: pieceBuffer,
 	}, nil
+	*/
 }
 
 func (p *PeerConnection) SendBlockRequest(piece *pc.Piece, bytesDownloaded int, blockSize int, netConn *net.Conn) error {
