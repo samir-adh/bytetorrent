@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ztrue/tracerr"
 	"github.com/samir-adh/bytetorrent/src/log"
 	pr "github.com/samir-adh/bytetorrent/src/peerconnection"
 	pc "github.com/samir-adh/bytetorrent/src/piece"
 	tr "github.com/samir-adh/bytetorrent/src/tracker"
+	"github.com/ztrue/tracerr"
 )
 
 type WorkerPool struct {
@@ -27,9 +27,10 @@ type WorkerPool struct {
 	wg          sync.WaitGroup
 	file        *os.File
 	logger      *log.Logger
+	pieceLength int
 }
 
-func NewWorkerPool(selfId [20]byte, infoHash [20]byte, peers []tr.Peer, pieces []pc.Piece, file *os.File,logger *log.Logger) *WorkerPool {
+func NewWorkerPool(selfId [20]byte, infoHash [20]byte, peers []tr.Peer, pieces []pc.Piece,pieceLength int, file *os.File, logger *log.Logger) *WorkerPool {
 	jobQueue := make(chan pc.Piece, len(pieces))
 	for _, piece := range pieces {
 		jobQueue <- piece
@@ -43,7 +44,8 @@ func NewWorkerPool(selfId [20]byte, infoHash [20]byte, peers []tr.Peer, pieces [
 		quit:        make(chan bool),
 		file:        file,
 		completed:   make([]bool, len(pieces)),
-		logger: logger,
+		logger:      logger,
+		pieceLength : pieceLength,
 	}
 
 }
@@ -64,18 +66,18 @@ func (wp *WorkerPool) collectPieces() {
 	for result := range wp.resultQueue {
 		if result.Error != nil {
 			close(wp.quit)
-			wp.logger.Printf(log.LowVerbose,"failed to download piece %d data, aborting torrent : %s\n", result.Index, result.Error)
+			wp.logger.Printf(log.LowVerbose, "failed to download piece %d data, aborting torrent : %s\n", result.Index, result.Error)
 		}
-		wp.logger.Printf(log.HighVerbose,"writing data of piece %d \n", result.Index)
+		wp.logger.Printf(log.HighVerbose, "writing data of piece %d \n", result.Index)
 		// time.Sleep(time.Duration(rand.Intn(1e3)) * time.Microsecond) // Simulate download time
 		// startTime := time.Now()
-		pieceDefaultSize := 262144
-		_, err := wp.file.WriteAt(result.Payload, int64(result.Index*pieceDefaultSize))
+		pieceDefaultSize := wp.pieceLength
+		bytesWritten, err := wp.file.WriteAt(result.Payload, int64(result.Index*pieceDefaultSize))
 		// ellapsedTime := time.Since(startTime)
 		// wp.logger.Printf("writing piece data took %dms\n", ellapsedTime.Milliseconds())
-		if err != nil {
+		if err != nil || bytesWritten != len(result.Payload) {
 			close(wp.quit)
-			wp.logger.Printf(log.HighVerbose,"failed to write piece data, aborting torrent : %s\n", err)
+			wp.logger.Printf(log.LowVerbose, "failed to write piece data, aborting torrent : %s\n", err)
 		}
 		wp.completedMu.Lock()
 		wp.completed[result.Index] = true
@@ -90,7 +92,7 @@ func (wp *WorkerPool) collectPieces() {
 		wp.completedMu.Unlock()
 		percentageComplete := completedCount * 100 / len(wp.completed)
 		// wp.logger.Printf(log.LowVerbose,"download %d %% complete", percentageComplete)
-		wp.logger.Progress(percentageComplete)
+		wp.logger.ProgressSimple(percentageComplete)
 		if downloadIsCompleted {
 			close(wp.quit)
 			return
@@ -107,7 +109,7 @@ func (wp *WorkerPool) worker(peer tr.Peer) {
 		5*time.Second,
 	)
 	if err != nil {
-		wp.logger.Print(log.HighVerbose,err.Error())
+		wp.logger.Print(log.HighVerbose, err.Error())
 		return
 	}
 	defer func() {
@@ -161,8 +163,9 @@ func (wp *WorkerPool) downloadPiece(piece *pc.Piece, peerConnection *pr.PeerConn
 	}
 
 	// Try to download the piece
-	wp.logger.Printf(log.HighVerbose,"downloading piece %d from peer %d\n", piece.Index, peerConnection.Peer.Id)
+	wp.logger.Printf(log.HighVerbose, "downloading piece %d from peer %d\n", piece.Index, peerConnection.Peer.Id)
 	pieceResult, err := peerConnection.Download(piece, netConn)
+	wp.logger.Printf(log.HighVerbose, "downloaded piece %d from peer %d\n", piece.Index, peerConnection.Peer.Id)
 	if err != nil {
 		// wp.logger.Print(log.HighVerbose, err)
 		return &pc.PieceResult{
@@ -175,7 +178,12 @@ func (wp *WorkerPool) downloadPiece(piece *pc.Piece, peerConnection *pr.PeerConn
 	// Check integrity
 	hash := sha1.Sum(pieceResult.Payload)
 	if hash != piece.Hash {
-		tracerr.Errorf("hash of downloaded piece %d doesn't match expected hash\n", piece.Index)
+		err = tracerr.Errorf("hash of downloaded piece %d doesn't match expected hash\n", piece.Index)
+		return &pc.PieceResult{
+			Index: piece.Index,
+			Payload: nil,
+			Error: err,
+		}
 	}
 	// wp.logger.Printf("downloaded piece %d...\n", piece.Index)
 	return pieceResult

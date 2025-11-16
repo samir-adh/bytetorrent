@@ -18,6 +18,7 @@ type TorrentClient struct {
 	Port     int
 	Peers    []tr.Peer
 	Pieces   []pc.Piece
+	PieceLength int
 	FileName string
 	Logger   *log.Logger
 }
@@ -57,7 +58,6 @@ func New(filepath string, logger *log.Logger) (*TorrentClient, error) {
 		downloaded[i] = false
 	}
 	logger.Printf(log.LowVerbose, "Downloading %s", tor.Name)
-
 	return &TorrentClient{
 		InfoHash: tor.InfoHash,
 		SelfId:   self_id,
@@ -66,6 +66,7 @@ func New(filepath string, logger *log.Logger) (*TorrentClient, error) {
 		Pieces:   pieces,
 		FileName: tor.Name,
 		Logger:   logger,
+		PieceLength: tor.PieceLength,
 	}, nil
 }
 
@@ -85,7 +86,7 @@ func (client *TorrentClient) Download() error {
 		return err
 	}
 	defer file.Close()
-	wp := mgr.NewWorkerPool(client.SelfId, client.InfoHash, client.Peers, client.Pieces, file, client.Logger)
+	wp := mgr.NewWorkerPool(client.SelfId, client.InfoHash, client.Peers, client.Pieces, client.PieceLength, file, client.Logger)
 	wp.Start()
 	return nil
 }

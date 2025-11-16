@@ -19,10 +19,13 @@ type block struct {
 
 func DownloadPiece(piece *pc.Piece, netConn *net.Conn) (*pc.PieceResult, error) {
 	defaultBlockSize := 16384
-	blocksCount := (piece.Length / defaultBlockSize)
+	blocksCount := piece.Length / defaultBlockSize
+	if piece.Length % defaultBlockSize != 0 {
+		blocksCount++
+	}
 	for i := range blocksCount {
 		offset := i * defaultBlockSize
-		blockSize := 16384
+		blockSize := defaultBlockSize
 		if offset+defaultBlockSize > piece.Length {
 			blockSize = piece.Length - offset
 		}
@@ -33,8 +36,7 @@ func DownloadPiece(piece *pc.Piece, netConn *net.Conn) (*pc.PieceResult, error) 
 	
 	pieceBuffer := make([]byte, piece.Length)
 	
-	for range blocksCount {
-		// fmt.Printf("%dth block from piece %d\n", i+1, piece.Index)
+	for  range blocksCount {
 		response, err := message.Read(*netConn)
 		if err != nil {
 			return nil, tracerr.Wrap(err)
@@ -58,7 +60,8 @@ func DownloadPiece(piece *pc.Piece, netConn *net.Conn) (*pc.PieceResult, error) 
 func parseBlockData(payload []byte) *block {
 	index := binary.BigEndian.Uint32(payload[0:4])
 	offset := binary.BigEndian.Uint32(payload[4:8])
-	data := payload[8:]
+	data := make([]byte, len(payload[8:]))
+	copy(data, payload[8:])
 	return &block{
 		Index:  int(index),
 		Offset: int(offset),
