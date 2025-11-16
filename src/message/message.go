@@ -42,6 +42,9 @@ func Read(r io.Reader) (*Message, error) {
 	buf_length := make([]byte, 4)
 	_, err := io.ReadFull(r, buf_length)
 	if err != nil {
+		if err == io.EOF {
+			return nil, err
+		}
 		return nil, tracerr.Wrap(err)
 	}
 	length := binary.BigEndian.Uint32(buf_length)
@@ -52,7 +55,10 @@ func Read(r io.Reader) (*Message, error) {
 	buf_message := make([]byte, length)
 	_, err = io.ReadFull(r, buf_message) // the first 4 bytes were already read 
 	if err != nil {
-		return nil, tracerr.Wrap(err)
+		if err == io.EOF {
+			return nil, err
+		}
+			return nil, tracerr.Wrap(err)
 	}
 	message_id := uint8(buf_message[0])
 	payload := buf_message[1:]

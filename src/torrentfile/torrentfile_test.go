@@ -16,7 +16,7 @@ var testBencodeTorrent = BencodeTorrent{
 	},
 }
 
-func TestOpen(t *testing.T) {
+func TestOpenTorrentFile(t *testing.T) {
 	filepath := "testdata/cosmos-laundromat.torrent"
 	tf, err := OpenTorrentFile(filepath)
 	if err != nil {
