@@ -16,13 +16,13 @@ type block struct {
 	Data   []byte
 }
 
-
 func DownloadPiece(piece *pc.Piece, netConn *net.Conn) (*pc.PieceResult, error) {
 	defaultBlockSize := 16384
 	blocksCount := piece.Length / defaultBlockSize
-	if piece.Length % defaultBlockSize != 0 {
+	if piece.Length%defaultBlockSize != 0 {
 		blocksCount++
 	}
+	downloadedBlocks := 0
 	for i := range blocksCount {
 		offset := i * defaultBlockSize
 		blockSize := defaultBlockSize
@@ -33,16 +33,19 @@ func DownloadPiece(piece *pc.Piece, netConn *net.Conn) (*pc.PieceResult, error) 
 			return nil, tracerr.Wrap(err)
 		}
 	}
-	
+
 	pieceBuffer := make([]byte, piece.Length)
-	
-	for  range blocksCount {
+
+	for downloadedBlocks < blocksCount {
 		response, err := message.Read(*netConn)
 		if err != nil {
 			return nil, tracerr.Wrap(err)
 		}
 		if response.Id != message.MsgPiece {
-			return nil, fmt.Errorf("expected message id %d, got %d", message.MsgPiece, response.Id)
+			switch response.Id {
+			default:
+				return nil, fmt.Errorf("expected message id %d, got %d", message.MsgPiece, response.Id)
+			}
 		}
 
 		block := parseBlockData(response.Payload)

@@ -19,8 +19,8 @@ mkdir -p downloads1/complete downloads1/incomplete downloads2/complete downloads
 if [ ! -f test-files/test-file.dat ]; then
     echo "Creating test file..."
     # echo "Hello from BitTorrent test environment!" > test-files/test-file.dat
-    # dd if=/dev/urandom of=test-files/test-file.dat bs=1M count=1 iflag=fullblock
-   cp test-files/filecontent.txt test-files/test-file.dat
+    dd if=/dev/urandom of=test-files/test-file.dat bs=8M count=1 iflag=fullblock
+#    cp test-files/filecontent.txt test-files/test-file.dat
 fi
 
 # Start Docker containers

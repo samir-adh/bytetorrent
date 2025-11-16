@@ -19,6 +19,7 @@ type WorkerPool struct {
 	selfId      [20]byte
 	infoHash    [20]byte
 	peers       []tr.Peer
+	pieces		[]pc.Piece
 	pieceQueue  chan pc.Piece
 	resultQueue chan pc.PieceResult
 	quit        chan bool
@@ -39,6 +40,7 @@ func NewWorkerPool(selfId [20]byte, infoHash [20]byte, peers []tr.Peer, pieces [
 		selfId:      selfId,
 		infoHash:    infoHash,
 		peers:       peers,
+		pieces: pieces,
 		pieceQueue:  jobQueue,
 		resultQueue: make(chan pc.PieceResult, len(jobQueue)),
 		quit:        make(chan bool),
@@ -65,8 +67,8 @@ func (wp *WorkerPool) Start() {
 func (wp *WorkerPool) collectPieces() {
 	for result := range wp.resultQueue {
 		if result.Error != nil {
-			close(wp.quit)
 			wp.logger.Printf(log.LowVerbose, "failed to download piece %d data, aborting torrent : %s\n", result.Index, result.Error)
+			close(wp.quit)
 		}
 		wp.logger.Printf(log.HighVerbose, "writing data of piece %d \n", result.Index)
 		// time.Sleep(time.Duration(rand.Intn(1e3)) * time.Microsecond) // Simulate download time
@@ -76,8 +78,8 @@ func (wp *WorkerPool) collectPieces() {
 		// ellapsedTime := time.Since(startTime)
 		// wp.logger.Printf("writing piece data took %dms\n", ellapsedTime.Milliseconds())
 		if err != nil || bytesWritten != len(result.Payload) {
-			close(wp.quit)
 			wp.logger.Printf(log.LowVerbose, "failed to write piece data, aborting torrent : %s\n", err)
+			close(wp.quit)
 		}
 		wp.completedMu.Lock()
 		wp.completed[result.Index] = true
@@ -151,8 +153,15 @@ type ErrorMissingPiece struct {
 	PieceIndex int
 }
 
+
 func (err ErrorMissingPiece) Error() string {
 	return fmt.Sprintf("piece %d is missing from peer", err.PieceIndex)
+}
+type ErrorConnectionFailed struct {
+	PeerId int
+}
+func (err ErrorConnectionFailed) Error() string {
+	return  fmt.Sprintf("failed to connect to peer %d", err.PeerId)
 }
 
 func (wp *WorkerPool) downloadPiece(piece *pc.Piece, peerConnection *pr.PeerConnection, netConn *net.Conn) *pc.PieceResult {
