@@ -8,7 +8,7 @@ import (
 
 func TestRead(t *testing.T) {
 	// Expected Payload Data
-	testPayload := []byte{0xDE, 0xAD, 0xBE, 0xEF}
+	testPayload := []byte{0x13, 0xAD, 0xBE, 0xEF}
 	testMessageID := byte(10)
 
 	bodyLength := 1 + len(testPayload) 
