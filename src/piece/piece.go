@@ -18,5 +18,5 @@ type Piece struct {
 type PieceResult struct {
 	Index   int
 	Payload []byte
-	State PieceState
+	State   PieceState
 }

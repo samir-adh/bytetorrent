@@ -94,7 +94,7 @@ func (client *TorrentClient) Download() error {
 	defer file.Close()
 	client.workerPool(
 		file,
-		)
+	)
 	return nil
 }
 
@@ -158,7 +158,6 @@ func (client *TorrentClient) worker(
 	for {
 		select {
 		case piece := <-pieceQueue:
-			// fmt.Printf("Connection to peer %d processing job %d\n", peer.Id, job.Index)
 			result := client.downloadPiece(&piece, pieceQueue, peerConnection, &netConn)
 			// check if piece is missing from peer
 			switch result.State {
@@ -187,10 +186,9 @@ func (client *TorrentClient) downloadPiece(piece *pc.Piece, pieceQueue chan pc.P
 
 	// Try to download the piece
 	client.Logger.Printf(log.HighVerbose, "downloading piece %d from peer %d\n", piece.Index, peerConnection.Peer.Id)
-	pieceResult, err := peerConnection.Download(piece, netConn)
+	pieceResult, err := peerConnection.Download(piece)
 	client.Logger.Printf(log.HighVerbose, "downloaded piece %d from peer %d\n", piece.Index, peerConnection.Peer.Id)
 	if err != nil {
-		// wp.logger.Print(log.HighVerbose, err)
 		return &pc.PieceResult{
 			Index:   piece.Index,
 			Payload: nil,
@@ -208,7 +206,6 @@ func (client *TorrentClient) downloadPiece(piece *pc.Piece, pieceQueue chan pc.P
 			State:   pc.Failed,
 		}
 	}
-	// wp.logger.Printf("downloaded piece %d...\n", piece.Index)
 	return pieceResult
 
 }

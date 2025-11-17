@@ -11,7 +11,7 @@ func TestRead(t *testing.T) {
 	testPayload := []byte{0x13, 0xAD, 0xBE, 0xEF}
 	testMessageID := byte(10)
 
-	bodyLength := 1 + len(testPayload) 
+	bodyLength := 1 + len(testPayload)
 
 	lengthPrefix := make([]byte, 4)
 	binary.BigEndian.PutUint32(lengthPrefix, uint32(bodyLength))
@@ -20,7 +20,7 @@ func TestRead(t *testing.T) {
 	validMessage.WriteByte(testMessageID)
 	validMessage.Write(testPayload)
 
-	readOutput,err := Read(validMessage)
+	readOutput, err := Read(validMessage)
 	if err != nil {
 		t.Fatalf("test case failed with : %s", err)
 	}
@@ -29,16 +29,16 @@ func TestRead(t *testing.T) {
 		t.Errorf("expected message id %d but got %d", testMessageID, readOutput.Id)
 	}
 
-	if readOutput.Length != uint32(bodyLength){
+	if readOutput.Length != uint32(bodyLength) {
 		t.Errorf("expected body length of %d but got %d", bodyLength, readOutput.Length)
 	}
 
 	validPayload := len(readOutput.Payload) == len(testPayload)
 	if !validPayload {
-		t.Errorf("mismatch in payload size, expected %d but got %d",  len(testPayload),len(readOutput.Payload))
+		t.Errorf("mismatch in payload size, expected %d but got %d", len(testPayload), len(readOutput.Payload))
 	}
-	for i := range(readOutput.Payload){
-		if readOutput.Payload[i] != testPayload[i]{
+	for i := range readOutput.Payload {
+		if readOutput.Payload[i] != testPayload[i] {
 			t.Errorf("incorrect payload")
 		}
 	}

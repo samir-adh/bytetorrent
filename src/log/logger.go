@@ -67,11 +67,11 @@ func (logger *Logger) Progress(progress int, downloaded, total int64) {
 	// Calculate speed and ETA
 	elapsed := time.Since(logger.startTime)
 	var speedStr, etaStr string
-	
+
 	if downloaded > 0 && elapsed.Seconds() > 0 {
 		speed := float64(downloaded) / elapsed.Seconds() // bytes per second
 		speedStr = formatBytes(speed) + "/s"
-		
+
 		if progress > 0 {
 			remaining := float64(total-downloaded) / speed
 			etaStr = formatDuration(time.Duration(remaining * float64(time.Second)))
@@ -90,15 +90,15 @@ func (logger *Logger) Progress(progress int, downloaded, total int64) {
 	// Print the progress bar
 	fmt.Print(barColor + colorBold + "[" + bar + "]" + colorReset)
 	fmt.Printf(" %s%d%%%s", colorCyan, progress, colorReset)
-	
+
 	if speedStr != "" {
 		fmt.Printf(" | %s", speedStr)
 	}
-	
+
 	if etaStr != "" {
 		fmt.Printf(" | ETA: %s", etaStr)
 	}
-	
+
 	fmt.Printf(" | %s", sizeInfo)
 
 	// Print newline when complete

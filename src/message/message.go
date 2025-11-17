@@ -53,12 +53,12 @@ func Read(r io.Reader) (*Message, error) {
 	}
 	// Read the rest of the message
 	buf_message := make([]byte, length)
-	_, err = io.ReadFull(r, buf_message) // the first 4 bytes were already read 
+	_, err = io.ReadFull(r, buf_message) // the first 4 bytes were already read
 	if err != nil {
 		if err == io.EOF {
 			return nil, err
 		}
-			return nil, tracerr.Wrap(err)
+		return nil, tracerr.Wrap(err)
 	}
 	message_id := uint8(buf_message[0])
 	payload := buf_message[1:]
