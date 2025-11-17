@@ -1,26 +1,32 @@
 package torrentclient
 
 import (
+	"crypto/sha1"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
+	"sync"
+	"time"
 
-	mgr "github.com/samir-adh/bytetorrent/src/downloadmanager"
 	"github.com/samir-adh/bytetorrent/src/log"
+	pr "github.com/samir-adh/bytetorrent/src/peerconnection"
 	pc "github.com/samir-adh/bytetorrent/src/piece"
 	"github.com/samir-adh/bytetorrent/src/torrentfile"
 	tr "github.com/samir-adh/bytetorrent/src/tracker"
+	"github.com/ztrue/tracerr"
 )
 
 type TorrentClient struct {
-	InfoHash [20]byte
-	SelfId   [20]byte
-	Port     int
-	Peers    []tr.Peer
-	Pieces   []pc.Piece
-	PieceLength int
-	FileName string
-	Logger   *log.Logger
+	InfoHash         [20]byte
+	SelfId           [20]byte
+	Port             int
+	Peers            []tr.Peer
+	Pieces           []pc.Piece
+	PieceLength      int
+	FileName         string
+	Logger           *log.Logger
+	DownloadedPieces []bool
 }
 
 func New(filepath string, logger *log.Logger) (*TorrentClient, error) {
@@ -48,7 +54,6 @@ func New(filepath string, logger *log.Logger) (*TorrentClient, error) {
 	for i := range len(tor.PiecesHash) {
 		pieces[i] = pc.Piece{
 			Index:  i,
-			State:  pc.Missing,
 			Hash:   tor.PiecesHash[i],
 			Length: tor.GetPieceLength(i),
 		}
@@ -59,14 +64,15 @@ func New(filepath string, logger *log.Logger) (*TorrentClient, error) {
 	}
 	logger.Printf(log.LowVerbose, "Downloading %s", tor.Name)
 	return &TorrentClient{
-		InfoHash: tor.InfoHash,
-		SelfId:   self_id,
-		Port:     port,
-		Peers:    peers,
-		Pieces:   pieces,
-		FileName: tor.Name,
-		Logger:   logger,
-		PieceLength: tor.PieceLength,
+		InfoHash:         tor.InfoHash,
+		SelfId:           self_id,
+		Port:             port,
+		Peers:            peers,
+		Pieces:           pieces,
+		FileName:         tor.Name,
+		Logger:           logger,
+		PieceLength:      tor.PieceLength,
+		DownloadedPieces: downloaded,
 	}, nil
 }
 
@@ -86,9 +92,166 @@ func (client *TorrentClient) Download() error {
 		return err
 	}
 	defer file.Close()
-	wp := mgr.NewWorkerPool(client.SelfId, client.InfoHash, client.Peers, client.Pieces, client.PieceLength, file, client.Logger)
-	wp.Start()
+	client.workerPool(
+		file,
+		)
 	return nil
+}
+
+func (client *TorrentClient) workerPool(file *os.File) {
+	piecesQueue := make(chan pc.Piece, len(client.Pieces))
+	resultsQueue := make(chan pc.PieceResult, len(client.Pieces))
+	quit := make(chan bool)
+	wg := sync.WaitGroup{}
+	for _, piece := range client.Pieces {
+		piecesQueue <- piece
+	}
+	for _, peer := range client.Peers {
+		wg.Go(func() {
+			client.worker(
+				peer,
+				piecesQueue,
+				resultsQueue,
+				quit,
+			)
+		})
+	}
+
+	wg.Go(func() {
+		client.collectPieces(
+			file,
+			resultsQueue,
+			quit,
+		)
+	})
+	wg.Wait()
+	close(piecesQueue)
+	close(resultsQueue)
+}
+
+func (client *TorrentClient) worker(
+	peer tr.Peer,
+	pieceQueue chan pc.Piece,
+	resultsQueue chan pc.PieceResult,
+	quit chan bool,
+) {
+	netConn, err := net.DialTimeout(
+		"tcp",
+		peer.AddressToStr(),
+		5*time.Second,
+	)
+	if err != nil {
+		client.Logger.Print(log.HighVerbose, err.Error())
+		return
+	}
+	defer func() {
+		if err := netConn.Close(); err != nil {
+			client.Logger.Print(log.LowVerbose, err.Error())
+		}
+	}() // Close the connection when the function finishes
+	peerConnection, err := pr.New(client.SelfId, peer, client.InfoHash, &netConn, client.Logger)
+	if err != nil {
+		client.Logger.Printf(log.LowVerbose, "could not connect to peer %s", (&peer).String())
+		return
+	}
+
+	for {
+		select {
+		case piece := <-pieceQueue:
+			// fmt.Printf("Connection to peer %d processing job %d\n", peer.Id, job.Index)
+			result := client.downloadPiece(&piece, pieceQueue, peerConnection, &netConn)
+			// check if piece is missing from peer
+			switch result.State {
+			case pc.Downloaded:
+				resultsQueue <- *result
+			case pc.Missing:
+				pieceQueue <- piece
+			default:
+				client.Logger.Printf(log.HighVerbose, "error downloading piece %d from peer %d with state %s\n", piece.Index, peer.Id, result.State)
+				close(quit)
+
+			}
+		case <-quit:
+			client.Logger.Printf(log.HighVerbose, "stopping connection to peer %d\n", peer.Id)
+			return
+		}
+	}
+}
+
+func (client *TorrentClient) downloadPiece(piece *pc.Piece, pieceQueue chan pc.Piece, peerConnection *pr.PeerConnection, netConn *net.Conn) *pc.PieceResult {
+
+	// Check that the peer has the piece
+	if !peerConnection.CanHandle(piece.Index) {
+		pieceQueue <- *piece
+	}
+
+	// Try to download the piece
+	client.Logger.Printf(log.HighVerbose, "downloading piece %d from peer %d\n", piece.Index, peerConnection.Peer.Id)
+	pieceResult, err := peerConnection.Download(piece, netConn)
+	client.Logger.Printf(log.HighVerbose, "downloaded piece %d from peer %d\n", piece.Index, peerConnection.Peer.Id)
+	if err != nil {
+		// wp.logger.Print(log.HighVerbose, err)
+		return &pc.PieceResult{
+			Index:   piece.Index,
+			Payload: nil,
+			State:   pc.Failed,
+		}
+	}
+
+	// Check integrity
+	hash := sha1.Sum(pieceResult.Payload)
+	if hash != piece.Hash {
+		err = tracerr.Errorf("hash of downloaded piece %d doesn't match expected hash\n", piece.Index)
+		return &pc.PieceResult{
+			Index:   piece.Index,
+			Payload: nil,
+			State:   pc.Failed,
+		}
+	}
+	// wp.logger.Printf("downloaded piece %d...\n", piece.Index)
+	return pieceResult
+
+}
+
+func (client *TorrentClient) collectPieces(file *os.File, resultsQueue chan pc.PieceResult, quit chan bool) {
+	for result := range resultsQueue {
+		if result.State != pc.Downloaded {
+			client.Logger.Printf(log.LowVerbose,
+				"failed to download piece %d data in state %d, aborting torrent.\n",
+				result.Index, result.State)
+			close(quit)
+		}
+		client.Logger.Printf(log.HighVerbose, "writing data of piece %d \n", result.Index)
+		// time.Sleep(time.Duration(rand.Intn(1e3)) * time.Microsecond) // Simulate download time
+		// startTime := time.Now()
+		pieceDefaultSize := client.PieceLength
+		bytesWritten, err := file.WriteAt(result.Payload, int64(result.Index*pieceDefaultSize))
+		// ellapsedTime := time.Since(startTime)
+		// wp.logger.Printf("writing piece data took %dms\n", ellapsedTime.Milliseconds())
+		if err != nil || bytesWritten != len(result.Payload) {
+			client.Logger.Printf(log.LowVerbose, "failed to write piece data, aborting torrent : %s\n", err)
+			close(quit)
+		}
+		// client.completedMu.Lock()
+		client.DownloadedPieces[result.Index] = true
+		downloadIsCompleted := true
+		completedCount := 0
+		for _, pieceIsCompleted := range client.DownloadedPieces {
+			downloadIsCompleted = downloadIsCompleted && pieceIsCompleted
+			if pieceIsCompleted {
+				completedCount += 1
+			}
+		}
+		// client.completedMu.Unlock()
+		percentageComplete := completedCount * 100 / len(client.DownloadedPieces)
+		// wp.logger.Printf(log.LowVerbose,"download %d %% complete", percentageComplete)
+		client.Logger.ProgressSimple(percentageComplete)
+		if downloadIsCompleted {
+			close(quit)
+			return
+		}
+	}
+
 }
 
 /*

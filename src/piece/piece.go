@@ -4,13 +4,13 @@ type PieceState int
 
 const (
 	Missing PieceState = iota
-	Downloading
+	HashError
 	Downloaded
+	Failed
 )
 
 type Piece struct {
 	Index  int
-	State  PieceState
 	Hash   [20]byte
 	Length int
 }
@@ -18,5 +18,5 @@ type Piece struct {
 type PieceResult struct {
 	Index   int
 	Payload []byte
-	Error   error
+	State PieceState
 }

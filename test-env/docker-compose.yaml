@@ -73,9 +73,9 @@ services:
   dev:
     image: golang:latest
     container_name: bt-dev
-    working_dir: /workspace
+    working_dir: /bytetorrent
     volumes:
-      - ../:/workspace 
+      - ../:/bytetorrent 
       - ./torrents:/torrents
       - ./dev-downloads:/downloads
     networks:
@@ -86,8 +86,12 @@ services:
       - seeder2
     stdin_open: true
     tty: true
-    command: sleep infinity
-
+    command: >
+      sh -c "
+      go mod tidy &&
+      sleep infinity
+      "
+ 
 
 networks:
   bt-network:

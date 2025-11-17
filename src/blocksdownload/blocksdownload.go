@@ -33,9 +33,9 @@ func DownloadPiece(piece *pc.Piece, netConn *net.Conn) (*pc.PieceResult, error) 
 			return nil, tracerr.Wrap(err)
 		}
 	}
-
+	
 	pieceBuffer := make([]byte, piece.Length)
-
+	
 	for downloadedBlocks < blocksCount {
 		response, err := message.Read(*netConn)
 		if err != nil {
@@ -47,15 +47,16 @@ func DownloadPiece(piece *pc.Piece, netConn *net.Conn) (*pc.PieceResult, error) 
 				return nil, fmt.Errorf("expected message id %d, got %d", message.MsgPiece, response.Id)
 			}
 		}
-
+		
 		block := parseBlockData(response.Payload)
 		copy(pieceBuffer[block.Offset:], block.Data)
+		downloadedBlocks++
 	}
 
 	return &pc.PieceResult{
 		Index:   piece.Index,
 		Payload: pieceBuffer,
-		Error:   nil,
+		State:   pc.Downloaded,
 	}, nil
 
 }

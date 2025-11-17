@@ -13,7 +13,7 @@ func main() {
 	if len(os.Args) > 1 {
 		filepath = os.Args[1]
 	}
-	verboseLevel := log.HighVerbose
+	verboseLevel := log.LowVerbose
 	logger := log.Logger{Verbose: verboseLevel}
 	client, err := torrentclient.New(filepath, &logger)
 	if err != nil {
