@@ -167,7 +167,7 @@ func (client *TorrentClient) worker(
 			case pc.Missing:
 				pieceQueue <- piece
 			default:
-				client.Logger.Printf(log.HighVerbose, "error downloading piece %d from peer %d with state %s\n", piece.Index, peer.Id, result.State)
+				client.Logger.Printf(log.HighVerbose, "error downloading piece %d from peer %d with state %d\n", piece.Index, peer.Id, result.State)
 				close(quit)
 
 			}
