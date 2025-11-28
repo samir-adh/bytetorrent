@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"os"
 
 	"github.com/samir-adh/bytetorrent/src/log"
@@ -10,10 +11,16 @@ import (
 
 func main() {
 	filepath := "./test-env/torrents/test.torrent"
-	if len(os.Args) > 1 {
-		filepath = os.Args[1]
-	}
+	verbose := flag.Bool("v", false, "Enable verbose output mode")
 	verboseLevel := log.LowVerbose
+	if *verbose {
+		verboseLevel = log.HighVerbose
+	}
+	flag.Parse()
+	args := flag.Args()
+	if len(args) > 0 {
+		filepath = args[0]
+	}
 	logger := log.Logger{Verbose: verboseLevel}
 	client, err := torrentclient.New(filepath, &logger)
 	if err != nil {

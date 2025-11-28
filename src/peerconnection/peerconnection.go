@@ -11,6 +11,7 @@ import (
 	"github.com/ztrue/tracerr"
 )
 
+
 type PeerConnection struct {
 	SelfId          [20]byte
 	Peer            tracker.Peer
@@ -18,6 +19,7 @@ type PeerConnection struct {
 	InfoHash        [20]byte
 	logger          *log.Logger
 	netConn         *net.Conn
+	unchocked		bool
 }
 
 func New(selfId [20]byte, peer tracker.Peer, infoHash [20]byte, netConn *net.Conn, logger *log.Logger) (*PeerConnection, error) {
@@ -53,7 +55,6 @@ func New(selfId [20]byte, peer tracker.Peer, infoHash [20]byte, netConn *net.Con
 	if err := connection.receiveUnchoke(); err != nil {
 		return nil, tracerr.Wrap(err)
 	}
-
 	return &connection, nil
 }
 
@@ -110,6 +111,7 @@ func (p *PeerConnection) receiveUnchoke() error {
 	if msg.Id != message.MsgUnchoke {
 		return fmt.Errorf("expected unchoke message, got %s", msg.Id.String())
 	}
+	p.unchocked = true
 	p.logger.Println(log.HighVerbose, "Received unchoke message from peer:", p.Peer.String())
 	return nil
 }
@@ -214,8 +216,9 @@ func (p *PeerConnection) Download(piece *pc.Piece) (*pc.PieceResult, error) {
 		blocksCount++
 	}
 	downloadedBlocks := 0
-	for i := range blocksCount {
-		offset := i * defaultBlockSize
+	pieceBuffer := make([]byte, piece.Length)
+	for downloadedBlocks < blocksCount {
+		offset := downloadedBlocks * defaultBlockSize
 		blockSize := defaultBlockSize
 		if offset+defaultBlockSize > piece.Length {
 			blockSize = piece.Length - offset
@@ -223,26 +226,52 @@ func (p *PeerConnection) Download(piece *pc.Piece) (*pc.PieceResult, error) {
 		if err := p.sendBlockRequest(piece, offset, blockSize); err != nil {
 			return nil, tracerr.Wrap(err)
 		}
-	}
-
-	pieceBuffer := make([]byte, piece.Length)
-
-	for downloadedBlocks < blocksCount {
 		response, err := message.Read(*p.netConn)
 		if err != nil {
 			return nil, tracerr.Wrap(err)
 		}
-		if response.Id != message.MsgPiece {
-			switch response.Id {
-			default:
-				return nil, fmt.Errorf("expected message id %d, got %d", message.MsgPiece, response.Id)
+		switch response.Id {
+		default:
+			p.logger.Printf(log.HighVerbose, "expected message id %d, got %d\n", message.MsgPiece, response.Id)
+			continue
+			// return nil, fmt.Errorf("expected message id %d, got %d", message.MsgPiece, response.Id)
+		case message.MsgPiece :
+			block := parseBlockData(response.Payload)
+			copy(pieceBuffer[block.Offset:], block.Data)
+			downloadedBlocks++
+		
+		case message.MsgChoke:
+			p.logger.Printf(log.HighVerbose, "client go chocked by peer %d, waiting for unchocke message\n",p.Peer.Id)
+			for {
+				response ,err := message.Read(*p.netConn)
+				if err != nil {
+					return nil, tracerr.Wrap(err)
+				}
+				if response.Id == message.MsgUnchoke {
+					p.logger.Printf(log.HighVerbose, "client go unchoked by peer %d \n", p.Peer.Id)
+					break
+				}
 			}
 		}
-
-		block := parseBlockData(response.Payload)
-		copy(pieceBuffer[block.Offset:], block.Data)
-		downloadedBlocks++
 	}
+
+
+	// for downloadedBlocks < blocksCount {
+	// 	response, err := message.Read(*p.netConn)
+	// 	if err != nil {
+	// 		return nil, tracerr.Wrap(err)
+	// 	}
+	// 	if response.Id != message.MsgPiece {
+	// 		switch response.Id {
+	// 		default:
+	// 			return nil, fmt.Errorf("expected message id %d, got %d", message.MsgPiece, response.Id)
+	// 		}
+	// 	}
+
+	// 	block := parseBlockData(response.Payload)
+	// 	copy(pieceBuffer[block.Offset:], block.Data)
+	// 	downloadedBlocks++
+	// }
 
 	return &pc.PieceResult{
 		Index:   piece.Index,
@@ -281,3 +310,4 @@ func (p *PeerConnection) sendBlockRequest(piece *pc.Piece, bytesDownloaded int, 
 	}
 	return nil
 }
+

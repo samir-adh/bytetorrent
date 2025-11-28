@@ -35,9 +35,9 @@ func (logger *Logger) Print(verboseLevel VerboseLevel, v ...any) {
 
 // Progress displays an enhanced progress bar with colors and statistics
 func (logger *Logger) Progress(progress int, downloaded, total int64) {
-	if logger.Verbose == HighVerbose {
-		return
-	}
+	// if logger.Verbose == HighVerbose {
+	// 	return
+	// }
 
 	logger.progressMutex.Lock()
 	defer logger.progressMutex.Unlock()
@@ -112,9 +112,9 @@ func (logger *Logger) Progress(progress int, downloaded, total int64) {
 
 // ProgressSimple is a simpler version without speed/ETA (backward compatible)
 func (logger *Logger) ProgressSimple(progress int) {
-	if logger.Verbose == HighVerbose {
-		return
-	}
+	// if logger.Verbose == HighVerbose {
+	// 	return
+	// }
 
 	logger.progressMutex.Lock()
 	defer logger.progressMutex.Unlock()
@@ -133,7 +133,7 @@ func (logger *Logger) ProgressSimple(progress int) {
 		color = "\033[32m" // Green
 	}
 
-	fmt.Printf("%s[%s] %d%%%s", color, bar, progress, "\033[0m")
+	fmt.Printf("%s[%s] %d%%%s\n", color, bar, progress, "\033[0m")
 
 	if progress >= 100 {
 		fmt.Println("\n\033[32m✓ Complete!\033[0m")

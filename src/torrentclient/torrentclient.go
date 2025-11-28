@@ -22,6 +22,8 @@ type TorrentClient struct {
 	SelfId           [20]byte
 	Port             int
 	Peers            []tr.Peer
+	ActivePeers      int
+	ActivePeersMu    *sync.Mutex
 	Pieces           []pc.Piece
 	PieceLength      int
 	FileName         string
@@ -47,6 +49,8 @@ func New(filepath string, logger *log.Logger) (*TorrentClient, error) {
 	httpClient := http.DefaultClient
 	logger.Printf(log.HighVerbose, "tracker request: %s\n", trackerRequest)
 	peers, err := tr.FindPeers(trackerRequest, httpClient)
+	logger.Printf(log.HighVerbose, "found %d peers\n", len(peers))
+
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +77,8 @@ func New(filepath string, logger *log.Logger) (*TorrentClient, error) {
 		Logger:           logger,
 		PieceLength:      tor.PieceLength,
 		DownloadedPieces: downloaded,
+		ActivePeers:      len(peers),
+		ActivePeersMu: &sync.Mutex{},
 	}, nil
 }
 
@@ -86,8 +92,8 @@ func (client *TorrentClient) Download() error {
 	for _, piece := range client.Pieces {
 		fileSize += piece.Length
 	}
-	client.Logger.Printf(log.HighVerbose, "creating file of size %d bytes", fileSize)
 	err = file.Truncate(int64(fileSize))
+	client.Logger.Printf(log.HighVerbose, "created file of size %d bytes", fileSize)
 	if err != nil {
 		return err
 	}
@@ -129,6 +135,13 @@ func (client *TorrentClient) workerPool(file *os.File) {
 	close(resultsQueue)
 }
 
+func (client *TorrentClient) signalUnactivePeer() {
+	client.ActivePeersMu.Lock()
+	client.ActivePeers -= 1
+	client.Logger.Printf(log.HighVerbose, "%d active peers\n", client.ActivePeers)
+	client.ActivePeersMu.Unlock()
+}
+
 func (client *TorrentClient) worker(
 	peer tr.Peer,
 	pieceQueue chan pc.Piece,
@@ -152,6 +165,7 @@ func (client *TorrentClient) worker(
 	peerConnection, err := pr.New(client.SelfId, peer, client.InfoHash, &netConn, client.Logger)
 	if err != nil {
 		client.Logger.Printf(log.LowVerbose, "could not connect to peer %s", (&peer).String())
+		client.signalUnactivePeer()
 		return
 	}
 
@@ -167,11 +181,12 @@ func (client *TorrentClient) worker(
 				pieceQueue <- piece
 			default:
 				client.Logger.Printf(log.HighVerbose, "error downloading piece %d from peer %d with state %d\n", piece.Index, peer.Id, result.State)
-				close(quit)
-
+				// close(quit)
+				return
 			}
 		case <-quit:
 			client.Logger.Printf(log.HighVerbose, "stopping connection to peer %d\n", peer.Id)
+			client.signalUnactivePeer()
 			return
 		}
 	}
@@ -212,13 +227,17 @@ func (client *TorrentClient) downloadPiece(piece *pc.Piece, pieceQueue chan pc.P
 
 func (client *TorrentClient) collectPieces(file *os.File, resultsQueue chan pc.PieceResult, quit chan bool) {
 	for result := range resultsQueue {
+		if client.ActivePeers == 0 {
+			close(quit)
+		}
 		if result.State != pc.Downloaded {
 			client.Logger.Printf(log.LowVerbose,
 				"failed to download piece %d data in state %d, aborting torrent.\n",
 				result.Index, result.State)
 			close(quit)
+			return
 		}
-		client.Logger.Printf(log.HighVerbose, "writing data of piece %d \n", result.Index)
+		client.Logger.Printf(log.HighVerbose, "writing data of piece %d/%d \n", result.Index, len(client.Pieces))
 		// time.Sleep(time.Duration(rand.Intn(1e3)) * time.Microsecond) // Simulate download time
 		// startTime := time.Now()
 		pieceDefaultSize := client.PieceLength
@@ -228,6 +247,7 @@ func (client *TorrentClient) collectPieces(file *os.File, resultsQueue chan pc.P
 		if err != nil || bytesWritten != len(result.Payload) {
 			client.Logger.Printf(log.LowVerbose, "failed to write piece data, aborting torrent : %s\n", err)
 			close(quit)
+			return
 		}
 		// client.completedMu.Lock()
 		client.DownloadedPieces[result.Index] = true
