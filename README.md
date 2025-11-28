@@ -18,8 +18,8 @@ go install bytetorrent/src/bytetorrent.go
 bytetorrent <your_torrent_file>
 ```
 
-try downloading the Debian disk image !
+Try to download the Debian 13 disk image !
 
 ```bash
-bytetorrent tes
+bytetorrent -f test-env/torrents/debian-13.1.0-amd64-netinst.iso.torrent
 ```
