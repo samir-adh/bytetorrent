@@ -10,19 +10,16 @@ import (
 )
 
 func main() {
-	filepath := "./test-env/torrents/test.torrent"
+	defaultFilepath := "./test-env/torrents/test.torrent"
+	filepath := flag.String("f", defaultFilepath, "Torrent file to download")
 	verbose := flag.Bool("v", false, "Enable verbose output mode")
+	flag.Parse()
 	verboseLevel := log.LowVerbose
 	if *verbose {
 		verboseLevel = log.HighVerbose
 	}
-	flag.Parse()
-	args := flag.Args()
-	if len(args) > 0 {
-		filepath = args[0]
-	}
 	logger := log.Logger{Verbose: verboseLevel}
-	client, err := torrentclient.New(filepath, &logger)
+	client, err := torrentclient.New(*filepath, &logger)
 	if err != nil {
 		tracerr.Print(err)
 		os.Exit(1)

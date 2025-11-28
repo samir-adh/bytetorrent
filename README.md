@@ -17,3 +17,9 @@ go install bytetorrent/src/bytetorrent.go
 ```bash
 bytetorrent <your_torrent_file>
 ```
+
+try downloading the Debian disk image !
+
+```bash
+bytetorrent tes
+```

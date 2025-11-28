@@ -133,7 +133,11 @@ func (logger *Logger) ProgressSimple(progress int) {
 		color = "\033[32m" // Green
 	}
 
-	fmt.Printf("%s[%s] %d%%%s\n", color, bar, progress, "\033[0m")
+	if logger.Verbose == HighVerbose {
+		fmt.Printf("%s[%s] %d%%%s\n", color, bar, progress, "\033[0m")
+	} else {
+		fmt.Printf("%s[%s] %d%%%s", color, bar, progress, "\033[0m")
+	}
 
 	if progress >= 100 {
 		fmt.Println("\n\033[32m✓ Complete!\033[0m")
