@@ -15,7 +15,7 @@ go install bytetorrent/src/bytetorrent.go
 ## Usage
 
 ```bash
-bytetorrent <your_torrent_file>
+bytetorrent -f <your_torrent_file>
 ```
 
 Try to download the Debian 13 disk image !
